@@ -1,0 +1,35 @@
+name: Validate
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Shell Script Syntax
+        run: |
+          bash -n setup.sh
+          bash -n apply_to_cleanyourtv.sh
+          echo "All shell scripts passed syntax checks."
+
+      - name: Validate Debloat Lists
+        run: |
+          for f in tv/*/*.txt; do
+            if [ -f "$f" ]; then
+              echo "Validating $f..."
+              test -s "$f"
+            fi
+          done
+          echo "All debloat lists validated."
+
+      - name: Verify Launcher APK
+        run: |
+          test -f bin/tvhome.apk
+          echo "Launcher APK verified: $(stat -c%s bin/tvhome.apk) bytes."

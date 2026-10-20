@@ -1,51 +1,53 @@
 #!/usr/bin/env bash
 # One-Click Setup & Restore Script for Android TV
 #
-# Supports multiple TV brand profiles (e.g. hisense_u7, tcl).
+# Applies debloat package lists, sets AdGuard Private DNS, installs
+# the customized Apple TV 4K-style launcher, and sets it as default Home.
 #
 # Usage:
-#   ./setup.sh [profile] [tv_ip]
+#   ./setup.sh <debloat_list_path> [tv_ip]
 #
 # Examples:
-#   ./setup.sh hisense_u7 10.0.10.25
-#   ./setup.sh tcl 10.0.10.26
-#   ./setup.sh hisense_u7
-#   TV_HOST=10.0.10.25 DEVICE=hisense_u7 ./setup.sh
+#   ./setup.sh tv/hisense/u7n.txt 10.0.10.25
+#   ./setup.sh tv/tcl/model.txt 10.0.10.26
+#   ./setup.sh tv/hisense/u7n.txt
+#   DEBLOAT_LIST=tv/hisense/u7n.txt TV_HOST=10.0.10.25 ./setup.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DEVICES_DIR="$SCRIPT_DIR/devices"
+TV_DIR="$SCRIPT_DIR/tv"
 
 # -----------------------------------------------------------------------------
-# Parse Arguments & Defaults
+# Parse Arguments
 # -----------------------------------------------------------------------------
 PARAM1="${1:-}"
 PARAM2="${2:-}"
 
-PROFILE="${DEVICE:-}"
+DEBLOAT_LIST="${DEBLOAT_LIST:-}"
 TV_HOST="${TV_HOST:-10.0.10.25}"
 TV_PORT="${TV_PORT:-5555}"
 
-# Helper to check if a string looks like an IP or hostname
+# Helper to check if a parameter looks like an IP or hostname
 is_ip() {
     [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "$1" =~ : ]]
 }
 
-if [ -n "$PARAM1" ]; then
-    if is_ip "$PARAM1"; then
-        TV_HOST="$PARAM1"
-    else
-        PROFILE="$PARAM1"
-    fi
-fi
+# Helper to check if a parameter looks like a file path
+is_file_path() {
+    [[ "$1" == *.txt ]] || [ -f "$1" ] || [ -f "$SCRIPT_DIR/$1" ]
+}
 
-if [ -n "$PARAM2" ]; then
-    if is_ip "$PARAM2"; then
-        TV_HOST="$PARAM2"
-    else
-        PROFILE="$PARAM2"
+for p in "$PARAM1" "$PARAM2"; do
+    if [ -n "$p" ]; then
+        if is_ip "$p"; then
+            TV_HOST="$p"
+        elif is_file_path "$p"; then
+            DEBLOAT_LIST="$p"
+        elif [ -z "$DEBLOAT_LIST" ]; then
+            DEBLOAT_LIST="$p"
+        fi
     fi
-fi
+done
 
 TARGET="${TV_HOST}:${TV_PORT}"
 
@@ -60,76 +62,68 @@ if ! command -v adb >/dev/null 2>&1; then
     exit 1
 fi
 
+# -----------------------------------------------------------------------------
+# Resolve Debloat List Path
+# -----------------------------------------------------------------------------
+if [ -z "$DEBLOAT_LIST" ]; then
+    AVAILABLE_LISTS=()
+    if [ -d "$TV_DIR" ]; then
+        while IFS= read -r f; do
+            AVAILABLE_LISTS+=("${f#$SCRIPT_DIR/}")
+        done < <(find "$TV_DIR" -type f -name "*.txt" | sort)
+    fi
+
+    if [ -t 0 ] && [ "${#AVAILABLE_LISTS[@]}" -gt 1 ]; then
+        echo "Select a debloat list to apply:"
+        select opt in "${AVAILABLE_LISTS[@]}"; do
+            if [ -n "$opt" ]; then
+                DEBLOAT_LIST="$opt"
+                break
+            fi
+        done
+    elif [ "${#AVAILABLE_LISTS[@]}" -ge 1 ]; then
+        DEBLOAT_LIST="${AVAILABLE_LISTS[0]}"
+        echo "Auto-selected debloat list: $DEBLOAT_LIST"
+    else
+        DEBLOAT_LIST="tv/hisense/u7n.txt"
+    fi
+fi
+
+# Resolve relative path if needed
+if [ ! -f "$DEBLOAT_LIST" ] && [ -f "$SCRIPT_DIR/$DEBLOAT_LIST" ]; then
+    DEBLOAT_LIST="$SCRIPT_DIR/$DEBLOAT_LIST"
+fi
+
+if [ ! -f "$DEBLOAT_LIST" ]; then
+    echo "Error: Debloat list not found at '$DEBLOAT_LIST'"
+    if [ -d "$TV_DIR" ]; then
+        echo "Available lists in ./tv/:"
+        find "$TV_DIR" -type f -name "*.txt" | sed "s|$SCRIPT_DIR/|  - |"
+    fi
+    exit 1
+fi
+
+echo "Using debloat list: $DEBLOAT_LIST"
+
+# -----------------------------------------------------------------------------
+# Connect over ADB
+# -----------------------------------------------------------------------------
 echo "[1/6] Connecting to TV over ADB ($TARGET)..."
 adb connect "$TARGET"
 
 # -----------------------------------------------------------------------------
-# Profile Detection / Selection
-# -----------------------------------------------------------------------------
-AVAILABLE_PROFILES=()
-if [ -d "$DEVICES_DIR" ]; then
-    for d in "$DEVICES_DIR"/*; do
-        if [ -d "$d" ]; then
-            AVAILABLE_PROFILES+=("$(basename "$d")")
-        fi
-    done
-fi
-
-if [ -z "$PROFILE" ]; then
-    # Try auto-detecting brand from TV over ADB
-    BRAND="$(adb -s "$TARGET" shell getprop ro.product.brand 2>/dev/null | tr -d '\r\n[:space:]' | tr '[:upper:]' '[:lower:]' || true)"
-    
-    if [[ "$BRAND" == *"hisense"* ]] && [ -d "$DEVICES_DIR/hisense_u7" ]; then
-        PROFILE="hisense_u7"
-        echo "Auto-detected Hisense TV. Selected profile: $PROFILE"
-    elif [[ "$BRAND" == *"tcl"* ]] && [ -d "$DEVICES_DIR/tcl" ]; then
-        PROFILE="tcl"
-        echo "Auto-detected TCL TV. Selected profile: $PROFILE"
-    elif [ -t 0 ] && [ "${#AVAILABLE_PROFILES[@]}" -gt 0 ]; then
-        echo ""
-        echo "Select TV Brand Profile:"
-        select opt in "${AVAILABLE_PROFILES[@]}"; do
-            if [ -n "$opt" ]; then
-                PROFILE="$opt"
-                break
-            fi
-        done
-    else
-        PROFILE="hisense_u7"
-        echo "Defaulting to profile: $PROFILE"
-    fi
-fi
-
-echo "Using profile: $PROFILE"
-
-# Locate debloat list
-DEBLOAT_FILE=""
-if [ -f "$DEVICES_DIR/$PROFILE/debloat-list.txt" ]; then
-    DEBLOAT_FILE="$DEVICES_DIR/$PROFILE/debloat-list.txt"
-elif [ -f "$SCRIPT_DIR/$PROFILE/debloat-list.txt" ]; then
-    DEBLOAT_FILE="$SCRIPT_DIR/$PROFILE/debloat-list.txt"
-elif [ -f "$SCRIPT_DIR/debloat-list.txt" ]; then
-    DEBLOAT_FILE="$SCRIPT_DIR/debloat-list.txt"
-fi
-
-# -----------------------------------------------------------------------------
 # Debloat Execution
 # -----------------------------------------------------------------------------
-echo "[2/6] Disabling manufacturer bloatware, telemetry & ads..."
-if [ -n "$DEBLOAT_FILE" ] && [ -f "$DEBLOAT_FILE" ]; then
-    echo "Applying debloat packages from: $DEBLOAT_FILE"
-    COUNT=0
-    while IFS= read -r line || [ -n "$line" ]; do
-        pkg="$(echo "$line" | sed 's/#.*//' | tr -d '[:space:]')"
-        if [ -n "$pkg" ]; then
-            adb -s "$TARGET" shell "pm disable-user --user 0 $pkg" >/dev/null 2>&1 || true
-            COUNT=$((COUNT + 1))
-        fi
-    done < "$DEBLOAT_FILE"
-    echo "Processed $COUNT debloat packages."
-else
-    echo "Warning: No debloat-list.txt found for profile '$PROFILE'. Skipping package debloat."
-fi
+echo "[2/6] Disabling bloatware, telemetry & ads from $DEBLOAT_LIST..."
+COUNT=0
+while IFS= read -r line || [ -n "$line" ]; do
+    pkg="$(echo "$line" | sed 's/#.*//' | tr -d '[:space:]')"
+    if [ -n "$pkg" ]; then
+        adb -s "$TARGET" shell "pm disable-user --user 0 $pkg" >/dev/null 2>&1 || true
+        COUNT=$((COUNT + 1))
+    fi
+done < "$DEBLOAT_LIST"
+echo "Processed $COUNT debloat packages."
 
 # -----------------------------------------------------------------------------
 # AdGuard Private DNS

@@ -2,9 +2,9 @@
 
 A modular, lightweight debloat configuration and setup framework for Android TV / Google TV.
 
-This repository stores personal customizations, device debloat profiles, automation scripts, and pre-built binaries. It replaces the stock ad-laden Google TV interface with a clean, responsive Apple TV 4K-style native launcher based on [CleanYourTV](https://github.com/Gathin23/cleanyourtv).
+This repository stores personal customizations, device debloat package lists, automation scripts, and pre-built binaries. It replaces the stock ad-laden Google TV interface with a clean, responsive Apple TV 4K-style native launcher based on [CleanYourTV](https://github.com/Gathin23/cleanyourtv).
 
-Designed to support multiple TV brand series (e.g., **Hisense U7 series**, **TCL TVs**) from a single unified framework.
+Designed to support multiple TV brand models and series (e.g., **Hisense U7N**, **TCL TVs**) by supplying the path to any target debloat list.
 
 ---
 
@@ -28,11 +28,11 @@ debloatandroidtv/
 │   ├── bools.xml           # Multi-line date enabled
 │   ├── banner_youtube.png  # High-res YouTube leanback banner for Tube
 │   └── ic_wifi_off.xml     # Offline status icon for Wi-Fi pill
-└── devices/                # Device-specific debloat profiles
-    ├── hisense_u7/         # Profile for Hisense U7 Series (SmartTV 4K FFM / hengshan)
-    │   └── debloat-list.txt# Exact 19 telemetry, store demo & background bloat packages
-    └── tcl/                # Profile for TCL Google TVs (C-Series, Q-Series, BeyondTV)
-        └── debloat-list.txt# TCL telemetry, Samba TV ACR tracking, & promo packages
+└── tv/                     # Brand & model debloat package lists
+    ├── hisense/
+    │   └── u7n.txt         # Hisense U7N debloat list (19 telemetry & bloat packages)
+    └── tcl/
+        └── model.txt       # TCL debloat list (Samba TV ACR, logkit, promo packages)
 ```
 
 ---
@@ -60,17 +60,17 @@ debloatandroidtv/
 4. Check your TV's IP address under **Settings** → **Network & Internet**.
 
 ### Step 2: Run Setup
-Run `setup.sh` from your computer, passing the TV profile and your TV's IP:
+Run `setup.sh` from your computer, passing the path to the target debloat list and your TV's IP:
 
 ```bash
-# For Hisense U7 series:
-./setup.sh hisense_u7 10.0.10.25
+# For Hisense U7N:
+./setup.sh tv/hisense/u7n.txt 10.0.10.25
 
-# For TCL TVs:
-./setup.sh tcl 10.0.10.26
+# For TCL TV:
+./setup.sh tv/tcl/model.txt 10.0.10.26
 ```
 
-*(If arguments are omitted, the script auto-detects the connected TV brand over ADB or prompts you with an interactive menu).*
+*(Arguments can be supplied in any order, e.g. `./setup.sh 10.0.10.25 tv/hisense/u7n.txt`. If omitted, the script presents an interactive list to choose from).*
 
 ### Step 3: Secure Your TV
 Once the script finishes:
@@ -80,7 +80,7 @@ Once the script finishes:
 
 > [!NOTE]
 > **After System OTA Updates or Factory Reset:**  
-> If an OTA firmware update resets your home screen or re-enables factory bloatware, simply re-enable USB debugging and run `./setup.sh <profile> <ip>` again. Everything will be restored in seconds.
+> If an OTA firmware update resets your home screen or re-enables factory bloatware, simply re-enable USB debugging and run `./setup.sh tv/hisense/u7n.txt <ip>` again. Everything will be restored in seconds.
 
 ---
 
@@ -131,44 +131,39 @@ Deploy using `setup.sh`:
 
 ```bash
 cd ~/code/github/debloatandroidtv
-./setup.sh hisense_u7 10.0.10.25
+./setup.sh tv/hisense/u7n.txt 10.0.10.25
 ```
 
 ---
 
-## Multi-Device Framework: Managing & Adding TV Profiles
+## Managing Debloat Lists (`./tv/<brand>/<model>.txt`)
 
-Debloat lists are decoupled into independent profiles under `devices/`:
+All debloat lists live under `./tv/` grouped by brand:
 
 ```text
-devices/
-├── hisense_u7/
-│   └── debloat-list.txt
+tv/
+├── hisense/
+│   └── u7n.txt
 └── tcl/
-    └── debloat-list.txt
+    ├── model.txt
+    └── c645.txt
 ```
 
-### Adding a New TV Profile (e.g. `tcl_bedroom` or `sony_bravia`)
-1. Create a new directory inside `devices/`:
+### Adding a New Model (e.g., `tv/tcl/c645.txt` or `tv/sony/x90k.txt`)
+1. Create the brand folder if it doesn't already exist:
    ```bash
-   mkdir -p devices/tcl_bedroom
+   mkdir -p tv/tcl
    ```
-2. Create `devices/tcl_bedroom/debloat-list.txt` with package names to disable (one per line, `#` comments supported):
+2. Create `<model>.txt` with package names to disable (one per line, `#` comments supported):
    ```text
-   # Telemetry
+   # Samba TV ACR Viewing Tracking
    com.tcl.ttvs
    com.tcl.logkit
    ```
-3. Deploy to that TV anytime:
+3. Deploy to that specific TV by passing its path:
    ```bash
-   ./setup.sh tcl_bedroom <tv_ip>
+   ./setup.sh tv/tcl/c645.txt 10.0.10.26
    ```
-
-### Profile Auto-Detection
-When you run `./setup.sh` without specifying a profile, the script checks the TV hardware over ADB:
-* If the TV reports brand `Hisense`, it automatically chooses `hisense_u7`.
-* If the TV reports brand `TCL`, it automatically chooses `tcl`.
-* Otherwise, it presents an interactive selection menu.
 
 ---
 
