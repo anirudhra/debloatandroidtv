@@ -1,0 +1,254 @@
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
+index c38133e..6e1ac2d 100644
+--- a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
++++ b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
+@@ -1112,9 +1112,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+             }
+             showHero(position, scroll ? r.top - dy : r.top);
+         } else {
+-            // A plain grid (dock_row false) has no dock to carry the glow, so it follows every tile there.
+-            if (dockRow) hideHero();
+-            else showGlowOnly(position);
++            showGlowOnly(position);
+             // Scroll just enough so the whole glass (not only the tile) is visible.
+             revealRect.set(0, -(int) pad * 2, item.getWidth(), item.getHeight() + (int) pad);
+             grid.requestChildRectangleOnScreen(item, revealRect, reducedMotion);
+@@ -1861,6 +1859,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+             if (!online) {
+                 text = getString(R.string.offline);
+                 vpn = false;
++                icon = R.drawable.ic_wifi_off;
+             } else if (ethernet) {
+                 text = getString(R.string.ethernet);
+                 icon = R.drawable.ic_ethernet;
+@@ -1878,29 +1877,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+             }
+         } catch (Exception ignored) {
+         }
+-        // With a VPN app configured, a VPN that is down matters too: show a red "VPN off" capsule then.
+-        boolean vpnDown = !vpn && online && !vpnApp.isEmpty();
+-        if (vpn || vpnDown) {
+-            // Network name, then the green lock-and-VPN (or red "VPN off") capsule drawn in place of the word.
+-            String badge = getString(vpn ? R.string.vpn : R.string.vpn_off);
+-            VpnBadge span = new VpnBadge(vpn ? getDrawable(R.drawable.ic_lock) : null, density);
+-            // The pill has a maximum width and ellipsizes at the end, which would cut the badge off after
+-            // a long network name, so shorten the name to whatever room the badge leaves. The total paddings
+-            // include the Wi-Fi icon.
+-            TextPaint paint = btnWifi.getPaint();
+-            float room = btnWifi.getMaxWidth() - btnWifi.getTotalPaddingStart() - btnWifi.getTotalPaddingEnd()
+-                    - span.getSize(paint, badge, 0, badge.length(), null) - paint.measureText(" ") - 2 * density;
+-            String name = TextUtils.ellipsize(text, paint, Math.max(0, room), TextUtils.TruncateAt.END).toString();
+-            // A long badge ("VPN отключён") can leave room for a stub like "MT…", which says nothing and, after
+-            // rounding, can push the badge itself out of the pill. Show the badge alone then.
+-            // The space stays even then: a line holding only the span gets no font metrics and collapses.
+-            text = name.length() < text.length() && name.length() < 5 ? "" : name;
+-            SpannableString label = new SpannableString(text + " " + badge);
+-            label.setSpan(span, text.length() + 1, label.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+-            btnWifi.setText(label);
+-        } else {
+-            btnWifi.setText(text);
+-        }
++        btnWifi.setText("");
++        btnWifi.setContentDescription(text);
++        btnWifi.setAlpha(!online ? 0.45f : 1.0f);
+         if (festive && diya != null) {
+             if (online && flame == 0) flame = 3;   // online some other way (cellular, USB tethering)
+             diya.setSteady(steady);
+diff --git a/launcher/app/src/main/res/drawable/banner_youtube.png b/launcher/app/src/main/res/drawable/banner_youtube.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..0a247900f75a2330b9d4038dca004db8dd651bb6
+GIT binary patch
+literal 1330
+zcmV-21<m@2P)<h;3K|Lk000e1NJLTq00BS%006WI0{{R3(mDkr0001rP)t-s_4W1m
+zxVZXydiz^j{XISVYisw%$N8C={7g*#9v=Sy04OLZ!otG#=H~q^E$Haz&d$!;+uOCZ
+zwKOy|o12@Cj*d=FPJw}eTU%SGsHk*wboSQP_^7C8XlOw}LI1$O|A2u15D@?W|Nr3N
+z|6pMMKtTD4iT|LW|M2ktP*DFcF#nK{|8Q{sARt`x!c+hN1Y=1=K~#7F?8>zfz(5cL
+zurodN->;ccryeO=2mk;800000000000000000000;P1Lke;dZr^mO|r-iVa@GS>D<
+z9ZR261d$i^%|p3y5D3FuFK_`=kWfxa@5%c=-W9{}?^q+og@oYoH!Ub@CHsvKtF?%$
+zi);MG^1vN}W#`w)&%OBkiv^@`Naj&)tl4G=0CZenss6wT3~KJEn5TB*hHVB1pncy0
+zKmXjD&n#g0ip~!ecc{Y^`0Zx`a3AdWirx>c8`kV_1^!4O@B}w8?(oCGjfTS&c=|I5
+zr^pL)7Bku&uE1|;1pW>u9O<edxkIuI=^flLxsiR(0zak^_%WQY36mBR+U!{4wFT6H
+zpVJ8ZjzWeyYa!xL1!4_JRme<a*7~`q4p`vNM6kd>601?fY|2q!h2(u1Jsz;Y4>2ic
+z=NCKFF%s4+En;NjCiFCfoNc>e^?T7eW&)RjAkdosr)?z*sLr^0zSCI+US3^qDv&e?
+zou?YJd6h&{^S~%+B=5<3!`B5a1VNxQ++ieh$bkc!Rp902+0E7h+n~*0LGC!k$YcU5
+zzi8ok#~XbcgST;k|GB%^QlJVA88j9u4*ao10w)eMc^n5iOC1e?m-puzRnnmL*$dp}
+zeVRZg5eN{k`5Hq;fu5^}tptuf<Hl!;3$RnR_CKW)IJ7mN#~7;yw1V;p^qf6zA<+8&
+z+a)k!HR+MxluV#tOitvuLGg|svk3%G7n=#hB+@3d6()2T6y|Uefg`=`=}<-0<gm>t
+z5Zpg+BoG%tg`{w?VD(HQ(4W&{Am-t1UV-51W<!CU%OT8FL6e=3RWgAB153gy+;6iA
+z1ZOWB39Lwg(XF?s`&SfbLr6~!_r(ch98@%KB4kV{P~rm-f#pnLHbS6W5ZI>_$l?Oa
+zT13#6M&3t(8<jCY1%XW_fkynJ!AFZKr0JuZ$|R7|7xO3w2JV>HQQ-E?1oH4Z6fZDC
+zJB!v8wqSu78ma*4Wm`mm%HPs2Phel}mr6MV%DKSuzSfKgv~Tq+T&)SjyRu~q6tpNb
+zuP9Kg3B+k$jgvI~K1T&AI^qud>is|nEaT;(h(IC@&DE3w2OQU=BQ0>6a$awn3xtGW
+z?S9xJS!osp;+aNHR3OeNYs4@gqv6{Y@`7bVU>k<o=Qq*|r&pEXO9Dqf7?nj3V)$4!
+z6J+8GEWwobstS3<HzH7TPf$>y>jh>4V?lgQMdmG-ig?L9A`q7aFy1R+To9-hf;fOF
+z%z0po+2#-tC?`&-)hyReEC{4QtymXmhM6f{bIMT8Mw^I0rp??R&2?aUNuZhsA*Pe#
+z%#@lq=!)9v1$u|Vk+1~NH~F-?yi657LO*T2kXaC71oJ1J8WxbP|6BDS3fpWL2m26#
+z++-`Fjt6OUT<B?qK5lnC{0-Nq>_}|O|Cjle|J%Rq+pz!u006)sf9qlFDUXzY00000
+o0000000000000000001B7UOYder5u@CIA2c07*qoM6N<$f)n;*3IG5A
+
+literal 0
+HcmV?d00001
+
+diff --git a/launcher/app/src/main/res/drawable/ic_wifi_off.xml b/launcher/app/src/main/res/drawable/ic_wifi_off.xml
+new file mode 100644
+index 0000000..65231c4
+--- /dev/null
++++ b/launcher/app/src/main/res/drawable/ic_wifi_off.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="22dp"
++    android:height="22dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24">
++    <path
++        android:fillColor="#FFFFFFFF"
++        android:pathData="M23.64,7c-0.45,-0.34 -4.93,-4 -11.64,-4c-1.5,0 -2.8,0.19 -3.95,0.47L10.74,6.16C11.32,6.05 11.95,6 12,6c5.25,0 9.01,2.8 9.4,3.11L23.64,7zM3.41,1.86L2,3.27l2.08,2.08C2.56,6.23 1.46,7.21 1.36,7.29L12,20.54l3.52,-4.37 5.07,5.07 1.41,-1.41L3.41,1.86zM12,17.27l-5.35,-6.65c0.97,-0.74 2.87,-1.82 5.35,-1.82 0.35,0 0.69,0.03 1.02,0.07l-2.02,2.02c-0.33,0.39 -0.5,0.88 -0.5,1.38 0,0.5 0.17,0.99 0.5,1.38L12,17.27z" />
++</vector>
+diff --git a/launcher/app/src/main/res/layout/activity_main.xml b/launcher/app/src/main/res/layout/activity_main.xml
+index b8895f0..38f3990 100644
+--- a/launcher/app/src/main/res/layout/activity_main.xml
++++ b/launcher/app/src/main/res/layout/activity_main.xml
+@@ -187,7 +187,8 @@
+                     android:textSize="12sp"
+                     android:fontFamily="@font/outfit_medium"
+                     android:letterSpacing="0.22"
+-                    android:textAllCaps="true" />
++                    android:textAllCaps="true"
++                    android:visibility="gone" />
+ 
+                 <LinearLayout
+                     android:layout_width="match_parent"
+@@ -224,7 +225,7 @@
+ 
+                     <View
+                         android:layout_width="1dp"
+-                        android:layout_height="26dp"
++                        android:layout_height="34dp"
+                         android:layout_gravity="bottom"
+                         android:layout_marginStart="16dp"
+                         android:layout_marginEnd="16dp"
+@@ -236,7 +237,7 @@
+                         android:layout_weight="1"
+                         android:layout_height="wrap_content"
+                         android:layout_gravity="bottom"
+-                        android:layout_marginBottom="9dp"
++                        android:layout_marginBottom="8dp"
+                         android:orientation="vertical">
+ 
+                         <!-- Shamsi date ("27 Mehr 1405"), shown when shamsi_date is on. -->
+@@ -259,16 +260,16 @@
+                             android:gravity="left"
+                             android:layout_width="match_parent"
+                             android:layout_height="wrap_content"
+-                            android:singleLine="@bool/date_single_line"
++                            android:singleLine="false"
+                             android:maxLines="2"
+-                            android:lineSpacingExtra="6dp"
++                            android:lineSpacingExtra="3dp"
+                             android:ellipsize="end"
+                             android:format12Hour="@string/date_format_home"
+                             android:format24Hour="@string/date_format_home"
+                             android:textColor="#A6FFFFFF"
+                             android:textSize="14sp"
+                             android:fontFamily="@font/outfit_regular"
+-                            android:letterSpacing="0.14"
++                            android:letterSpacing="0.12"
+                             android:textAllCaps="true" />
+                     </LinearLayout>
+                 </LinearLayout>
+@@ -315,11 +316,8 @@
+ 
+                 <TextView
+                     android:id="@+id/btnWifi"
+-                    style="@style/TopButton"
+-                    android:maxWidth="180dp"
+-                    android:singleLine="true"
+-                    android:ellipsize="end"
+-                    android:text="@string/wifi"
++                    style="@style/TopButtonIcon"
++                    android:contentDescription="@string/wifi"
+                     android:drawableStart="@drawable/ic_wifi"
+                     android:nextFocusDown="@+id/grid" />
+ 
+@@ -332,8 +330,8 @@
+ 
+                 <TextView
+                     android:id="@+id/btnSettings"
+-                    style="@style/TopButton"
+-                    android:text="@string/settings"
++                    style="@style/TopButtonIcon"
++                    android:contentDescription="@string/settings"
+                     android:drawableStart="@drawable/ic_settings"
+                     android:nextFocusDown="@+id/grid" />
+             </LinearLayout>
+diff --git a/launcher/app/src/main/res/values/bools.xml b/launcher/app/src/main/res/values/bools.xml
+index e83b7f9..6293ad9 100644
+--- a/launcher/app/src/main/res/values/bools.xml
++++ b/launcher/app/src/main/res/values/bools.xml
+@@ -3,5 +3,5 @@
+     <bool name="rtl_app_grid">false</bool>
+     <bool name="rtl_menu_bar">false</bool>
+     <!-- Other locales keep the date on one line, ellipsized as before. -->
+-    <bool name="date_single_line">true</bool>
++    <bool name="date_single_line">false</bool>
+ </resources>
+diff --git a/launcher/app/src/main/res/values/config.xml b/launcher/app/src/main/res/values/config.xml
+index 3deebbe..a6dac14 100644
+--- a/launcher/app/src/main/res/values/config.xml
++++ b/launcher/app/src/main/res/values/config.xml
+@@ -9,10 +9,10 @@
+ 
+     <!-- Apps pinned to the dock row at the bottom, in this order. Missing apps are skipped. -->
+     <string-array name="dock_apps">
+-        <item>com.netflix.ninja</item>
++        <item>io.gh.reisxd.tizentube.cobalt</item>
++        <item>com.apple.atve.androidtv.appletv</item>
+         <item>com.amazon.amazonvideo.livingroom</item>
+-        <item>com.google.android.youtube.tv</item>
+-        <item>in.startv.hotstar</item>
++        <item>com.weathergroup.localnow</item>
+     </string-array>
+     <!-- With fewer dock_apps than columns (or a dock app that is not installed), the free dock slots take
+          the first grid apps, so the dock never shows a gap. false leaves them empty (#162); a theme can
+@@ -21,12 +21,13 @@
+ 
+     <!-- Apps never shown as tiles (e.g. the Live TV app, which the Inputs menu already covers). -->
+     <string-array name="hidden_apps">
++        <item>com.vt.tv.tvcenter</item>
+         <item>com.mediatek.wwtv.tvcenter</item>
+         <item>com.mitv.gallery</item>
+     </string-array>
+ 
+     <!-- The TV's Live TV / tuner app, offered at the end of the Inputs menu. Leave empty to omit. -->
+-    <string name="live_tv_package" translatable="false">com.mediatek.wwtv.tvcenter</string>
++    <string name="live_tv_package" translatable="false">com.vt.tv.tvcenter</string>
+ 
+     <!-- Some TVs give their Live TV app no leanback entry point at all, so `live_tv_package` above
+          resolves to nothing (TCL Android TV 9 on China-market sets is one). This action is then sent
+@@ -41,10 +42,12 @@
+ 
+     <!-- A tile's name instead of the app's own: "package=Name". It also shows above the dock. -->
+     <string-array name="app_labels">
++        <item>io.gh.reisxd.tizentube.cobalt=Tube</item>
+     </string-array>
+     <!-- A tile's artwork instead of the app's banner: "package=drawable", a banner_* drawable bundled with the
+          launcher (res/drawable). banner_tv is a magenta field with the Live TV glyph. -->
+     <string-array name="app_banners">
++        <item>io.gh.reisxd.tizentube.cobalt=banner_youtube</item>
+     </string-array>
+ 
+     <!-- TVs with no TvInputManager have no HDMI list to read, but their own source-selection panel
+diff --git a/launcher/app/src/main/res/values/strings.xml b/launcher/app/src/main/res/values/strings.xml
+index 58d2338..bb12b51 100644
+--- a/launcher/app/src/main/res/values/strings.xml
++++ b/launcher/app/src/main/res/values/strings.xml
+@@ -18,7 +18,7 @@
+     <string name="offline">Offline</string>
+     <string name="not_available">Not available on this TV</string>
+     <string name="cant_open">Can\'t open %1$s</string>
+-    <string name="date_format">EEEE  d MMMM</string>
++    <string name="date_format">EEEE\nd MMMM</string>
+     <!-- Date next to the clock on Home; a locale can split it over two lines with \n. -->
+     <string name="date_format_home" translatable="false">@string/date_format</string>
+     <string name="stats_cpu">CPU %1$d%%</string>

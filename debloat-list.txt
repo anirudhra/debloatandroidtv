@@ -1,0 +1,28 @@
+# Hisense Android TV Debloat Package List
+# Target Device: Hisense SmartTV 4K FFM / hengshan (Android 12)
+#
+# Safe to disable with:
+#   adb shell pm disable-user --user 0 <package>
+
+# --- Hisense Telemetry, Store/Demo, & Background Assistants ---
+com.vt.tv.evservice
+com.vt.hishow
+com.vt.alexa
+com.vt.storemode
+com.vt.tv.b2b
+com.vt.factory
+com.vt.fte
+com.vt.tv.protector
+com.vt.tv.calmanconnector
+tv.mopa.ginga
+com.vt.tv.interactive
+com.vt.tv.mobiledeviceconnectiontips
+
+# --- Google Tracking, Partner Auto-Installers & Unused Services ---
+android.autoinstalls.config.google.gtvpai
+com.google.android.partnersetup
+com.google.android.feedback
+com.android.printspooler
+com.google.android.syncadapters.calendar
+com.android.providers.calendar
+com.android.providers.contacts
