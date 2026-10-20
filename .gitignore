@@ -1,0 +1,19 @@
+tools/venv/
+tools/adbkey/
+tools/android-sdk/
+tools/jdk-17/
+__pycache__/
+launcher/.gradle/
+launcher/build/
+launcher/app/build/
+launcher/local.properties
+# your own TV's dumps (serial, android_id, device names) stay local
+backup/
+.DS_Store
+
+# Generated install bundles and JVM crash reports stay out of contributions.
+*.apk
+!bin/*.apk
+*.aab
+launcher/hs_err_pid*.log
+launcher/replay_pid*.log
