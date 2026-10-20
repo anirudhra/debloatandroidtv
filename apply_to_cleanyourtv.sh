@@ -2,16 +2,26 @@
 # apply_to_cleanyourtv.sh
 # Applies custom launcher modifications to an upstream CleanYourTV clone
 # (https://github.com/Gathin23/cleanyourtv) and optionally builds the release APK.
+#
+# Usage:
+#   ./apply_to_cleanyourtv.sh [path_to_cleanyourtv] [--build]
+#
+# Examples:
+#   ./apply_to_cleanyourtv.sh ../cleanyourtv
+#   ./apply_to_cleanyourtv.sh --build
+#   ./apply_to_cleanyourtv.sh ../cleanyourtv --build
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CUSTOM_DIR="$SCRIPT_DIR/customizations"
-TARGET_DIR="${1:-../cleanyourtv}"
+TARGET_DIR="../cleanyourtv"
 BUILD_APK=false
 
 for arg in "$@"; do
     if [ "$arg" == "--build" ]; then
         BUILD_APK=true
+    elif [ -n "$arg" ] && [[ "$arg" != -* ]]; then
+        TARGET_DIR="$arg"
     fi
 done
 
@@ -23,6 +33,12 @@ fi
 
 echo "Applying customizations to '$TARGET_DIR'..."
 
+# Ensure target directories exist
+mkdir -p "$TARGET_DIR/launcher/app/src/main/res/drawable"
+mkdir -p "$TARGET_DIR/launcher/app/src/main/res/layout"
+mkdir -p "$TARGET_DIR/launcher/app/src/main/res/values"
+mkdir -p "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome"
+
 # Copy custom assets and source files
 cp "$CUSTOM_DIR/banner_youtube.png" "$TARGET_DIR/launcher/app/src/main/res/drawable/"
 cp "$CUSTOM_DIR/ic_wifi_off.xml" "$TARGET_DIR/launcher/app/src/main/res/drawable/"
@@ -32,10 +48,19 @@ cp "$CUSTOM_DIR/config.xml" "$TARGET_DIR/launcher/app/src/main/res/values/"
 cp "$CUSTOM_DIR/strings.xml" "$TARGET_DIR/launcher/app/src/main/res/values/"
 cp "$CUSTOM_DIR/bools.xml" "$TARGET_DIR/launcher/app/src/main/res/values/"
 
-echo "Successfully copied customized files into $TARGET_DIR/launcher."
+echo "Successfully merged customized files into $TARGET_DIR/launcher."
 
 if [ "$BUILD_APK" = true ]; then
     echo "Building release APK..."
+    # Check for JDK / Android SDK if present in cleanyourtv/tools
+    if [ -z "${JAVA_HOME:-}" ] && [ -d "$TARGET_DIR/tools/jdk-17" ]; then
+        export JAVA_HOME="$TARGET_DIR/tools/jdk-17"
+        export PATH="$JAVA_HOME/bin:$PATH"
+    fi
+    if [ -z "${ANDROID_HOME:-}" ] && [ -d "$TARGET_DIR/tools/android-sdk" ]; then
+        export ANDROID_HOME="$TARGET_DIR/tools/android-sdk"
+    fi
+
     (
         cd "$TARGET_DIR/launcher"
         ./gradlew assembleRelease --console=plain
