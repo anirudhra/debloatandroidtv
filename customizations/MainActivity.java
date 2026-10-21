@@ -170,6 +170,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private int[] settingsScancodes = new int[0];
     private boolean settingsKeyPanel;
     private long lastSettingsTrigger = 0;
+    private Map<Integer, String> appKeys = Collections.emptyMap();
+    private long lastAppTrigger = 0;
     /** Calmer motion for weak GPUs (config.xml, reduced_motion): stiff spring, short fades, no replay. */
     private boolean reducedMotion;
     /** config.xml dock_row: the first row is a separate dock (band, parked low, top shelf) rather than plain grid. */
@@ -309,6 +311,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         settingsKeycodes = cfg.settingsKeycodes;
         settingsScancodes = cfg.settingsScancodes;
         settingsKeyPanel = cfg.settingsKeyPanel;
+        appKeys = RemoteKeys.parseAppKeys(cfg.appKeys);
         COLUMNS = cfg.columns;
         animations = cfg.animations;
         advancedEffects = cfg.animations && cfg.advancedEffects;
@@ -837,6 +840,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     public boolean dispatchKeyEvent(KeyEvent event) {
         Log.i("CYT_KEYS", "MainActivity dispatchKeyEvent: keyCode=" + event.getKeyCode() + ", scanCode=" + event.getScanCode() + ", action=" + event.getAction());
         if (handleSettingsKey(event)) return true;
+        String app = appKeys.get(event.getKeyCode());
+        if (app != null) {
+            Log.i("CYT_KEYS", "MainActivity app button matched: " + app);
+            long now = SystemClock.uptimeMillis();
+            if (now - lastAppTrigger > 400) {
+                lastAppTrigger = now;
+                RemoteKeys.launch(this, app);
+            }
+            return true;
+        }
         if (alertInputBanner != null && alertInputBanner.getVisibility() == View.VISIBLE) {
             boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
             int code = event.getKeyCode();

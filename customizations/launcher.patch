@@ -154,7 +154,7 @@ index 8f41173..07e9012 100644
                  festival, inputKeycodes, appKeys, json == null ? Collections.emptyList() : raceCalendar(json), cinematic);
      }
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java b/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java
-index 2cc4aa2..c976564 100644
+index 2cc4aa2..2312d36 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java
 @@ -2,10 +2,13 @@ package com.gathin.tvhome;
@@ -191,7 +191,7 @@ index 2cc4aa2..c976564 100644
          settingsKeycodes = config.settingsKeycodes;
          settingsPanel = config.settingsKeyPanel;
          appKeys = RemoteKeys.parseAppKeys(config.appKeys);
-+        Log.i("CYT_KEYS", "HomeKeyService connected. settingsKeycodes=" + Arrays.toString(settingsKeycodes) + ", scancodes=" + Arrays.toString(settingsScancodes));
++        Log.i("CYT_KEYS", "HomeKeyService connected. appKeys=" + appKeys + ", settingsKeycodes=" + Arrays.toString(settingsKeycodes) + ", scancodes=" + Arrays.toString(settingsScancodes));
      }
  
      private boolean isSettingsKey(KeyEvent event) {
@@ -210,11 +210,12 @@ index 2cc4aa2..c976564 100644
                  Intent open = settingsPanel ? new Intent(this, QuickSettingsActivity.class)
                          : new Intent(Settings.ACTION_SETTINGS);
                  startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-@@ -58,7 +68,11 @@ public class HomeKeyService extends AccessibilityService {
+@@ -58,7 +68,12 @@ public class HomeKeyService extends AccessibilityService {
          }
          String app = appKeys.get(event.getKeyCode());
          if (app != null) {
 -            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) RemoteKeys.launch(this, app);
++            Log.i("CYT_KEYS", "HomeKeyService app button matched: " + app);
 +            long now = SystemClock.uptimeMillis();
 +            if (now - lastAppTrigger > 400) {
 +                lastAppTrigger = now;
@@ -224,7 +225,7 @@ index 2cc4aa2..c976564 100644
          }
          if (event.getKeyCode() != KeyEvent.KEYCODE_ALL_APPS) return false;
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
-index c38133e..b5b5cca 100644
+index c38133e..d657c8c 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 @@ -3,6 +3,7 @@ package com.gathin.tvhome;
@@ -252,17 +253,19 @@ index c38133e..b5b5cca 100644
  import android.util.TypedValue;
  import android.view.Gravity;
  import android.view.KeyEvent;
-@@ -163,7 +167,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -163,7 +167,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      private boolean moduleCards;
      /** config settings_key_keycodes / settings_key_panel, so the Settings button works on Home without HomeKeyService. */
      private int[] settingsKeycodes = new int[0];
 +    private int[] settingsScancodes = new int[0];
      private boolean settingsKeyPanel;
 +    private long lastSettingsTrigger = 0;
++    private Map<Integer, String> appKeys = Collections.emptyMap();
++    private long lastAppTrigger = 0;
      /** Calmer motion for weak GPUs (config.xml, reduced_motion): stiff spring, short fades, no replay. */
      private boolean reducedMotion;
      /** config.xml dock_row: the first row is a separate dock (band, parked low, top shelf) rather than plain grid. */
-@@ -208,6 +214,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -208,6 +216,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      private boolean libraryFocusPending;
      private RecyclerView.OnScrollListener pendingFocusScroll;
  
@@ -283,7 +286,7 @@ index c38133e..b5b5cca 100644
      private final Handler handler = new Handler(Looper.getMainLooper());
      /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
      private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
-@@ -231,6 +251,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -231,6 +253,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          @Override
          public void onInputRemoved(String inputId) {
              updateInputsButton();
@@ -299,7 +302,7 @@ index c38133e..b5b5cca 100644
          }
      };
      /** Listens for any VPN coming up or going down, even one this app's traffic is excluded from. */
-@@ -264,6 +293,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -264,6 +295,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              updateWifiLabel();
              sky.update();
              wallpaperPlayer.update();
@@ -308,15 +311,17 @@ index c38133e..b5b5cca 100644
              handler.postDelayed(this, MINUTE_MS);
          }
      };
-@@ -276,6 +307,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -276,7 +309,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
          Config cfg = Config.load(this);
          settingsKeycodes = cfg.settingsKeycodes;
 +        settingsScancodes = cfg.settingsScancodes;
          settingsKeyPanel = cfg.settingsKeyPanel;
++        appKeys = RemoteKeys.parseAppKeys(cfg.appKeys);
          COLUMNS = cfg.columns;
          animations = cfg.animations;
-@@ -483,10 +515,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+         advancedEffects = cfg.animations && cfg.advancedEffects;
+@@ -483,10 +518,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          btnReorder.setOnClickListener(v -> toggleReorder());
          btnReorder.setVisibility(cfg.reorderButton ? View.VISIBLE : View.GONE);
          btnSettings.setOnLongClickListener(v -> {
@@ -344,7 +349,7 @@ index c38133e..b5b5cca 100644
          // Keep focus on the top bar at its ends and at the top: Android's focus finder would otherwise
          // jump to a tile far below when there is nothing in that direction.
          boolean rtlMenuBar = getResources().getBoolean(R.bool.rtl_menu_bar);
-@@ -578,6 +626,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -578,6 +629,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onResume() {
          super.onResume();
@@ -352,7 +357,7 @@ index c38133e..b5b5cca 100644
          // A festival that started or ended while Home was in the background: rebuild with or without it.
          if (festive != festival.active(LocalDate.now())) {
              recreate();
-@@ -593,6 +642,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -593,6 +645,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          updateRace();
          updateWifiLabel();
          updateInputsButton();
@@ -360,7 +365,7 @@ index c38133e..b5b5cca 100644
          if (showStats) startStats();
          sky.update();
          wallpaperPlayer.start();
-@@ -692,6 +742,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -692,6 +745,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onPause() {
          super.onPause();
@@ -369,7 +374,7 @@ index c38133e..b5b5cca 100644
          endReorder();   // Home or another app while reordering keeps the order so far
          wallpaperPlayer.stop();
          stopAmbientAnimation();
-@@ -727,6 +779,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -727,6 +782,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onDestroy() {
          super.onDestroy();
@@ -377,7 +382,7 @@ index c38133e..b5b5cca 100644
          wallpaperPlayer.close();
          ConnectivityManager cm = getSystemService(ConnectivityManager.class);
          TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
-@@ -744,9 +797,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -744,9 +800,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
       * nothing even on Home.
       */
      private boolean handleSettingsKey(KeyEvent event) {
@@ -403,12 +408,22 @@ index c38133e..b5b5cca 100644
                  open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
                          : systemIntent(Settings.ACTION_SETTINGS));
              }
-@@ -769,7 +835,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -769,7 +838,36 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
       */
      @Override
      public boolean dispatchKeyEvent(KeyEvent event) {
 +        Log.i("CYT_KEYS", "MainActivity dispatchKeyEvent: keyCode=" + event.getKeyCode() + ", scanCode=" + event.getScanCode() + ", action=" + event.getAction());
          if (handleSettingsKey(event)) return true;
++        String app = appKeys.get(event.getKeyCode());
++        if (app != null) {
++            Log.i("CYT_KEYS", "MainActivity app button matched: " + app);
++            long now = SystemClock.uptimeMillis();
++            if (now - lastAppTrigger > 400) {
++                lastAppTrigger = now;
++                RemoteKeys.launch(this, app);
++            }
++            return true;
++        }
 +        if (alertInputBanner != null && alertInputBanner.getVisibility() == View.VISIBLE) {
 +            boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
 +            int code = event.getKeyCode();
@@ -430,7 +445,7 @@ index c38133e..b5b5cca 100644
          if (!reordering) return super.dispatchKeyEvent(event);
          if (dockEditing) return dispatchDockEdit(event);
          boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
-@@ -1019,7 +1104,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1019,7 +1117,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
  
      @Override
      public void onBackPressed() {
@@ -450,7 +465,7 @@ index c38133e..b5b5cca 100644
      }
  
      // ---- glass highlight -------------------------------------------------------------------------
-@@ -1112,9 +1208,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1112,9 +1221,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              }
              showHero(position, scroll ? r.top - dy : r.top);
          } else {
@@ -461,7 +476,7 @@ index c38133e..b5b5cca 100644
              // Scroll just enough so the whole glass (not only the tile) is visible.
              revealRect.set(0, -(int) pad * 2, item.getWidth(), item.getHeight() + (int) pad);
              grid.requestChildRectangleOnScreen(item, revealRect, reducedMotion);
-@@ -1657,6 +1751,46 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1657,6 +1764,46 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          return true;
      }
  
@@ -508,7 +523,7 @@ index c38133e..b5b5cca 100644
      @Override public void onLibraryFocused() {
          libraryFocusPending = false;
          hideGlass();
-@@ -1861,6 +1995,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1861,6 +2008,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              if (!online) {
                  text = getString(R.string.offline);
                  vpn = false;
@@ -516,7 +531,7 @@ index c38133e..b5b5cca 100644
              } else if (ethernet) {
                  text = getString(R.string.ethernet);
                  icon = R.drawable.ic_ethernet;
-@@ -1878,29 +2013,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1878,29 +2026,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              }
          } catch (Exception ignored) {
          }
@@ -549,7 +564,7 @@ index c38133e..b5b5cca 100644
          if (festive && diya != null) {
              if (online && flame == 0) flame = 3;   // online some other way (cellular, USB tethering)
              diya.setSteady(steady);
-@@ -2259,23 +2374,225 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2259,23 +2387,225 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
  
      // ---- launcher settings and module cards -------------------------------------------------------
  

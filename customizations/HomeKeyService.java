@@ -41,7 +41,7 @@ public class HomeKeyService extends AccessibilityService {
         settingsKeycodes = config.settingsKeycodes;
         settingsPanel = config.settingsKeyPanel;
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
-        Log.i("CYT_KEYS", "HomeKeyService connected. settingsKeycodes=" + Arrays.toString(settingsKeycodes) + ", scancodes=" + Arrays.toString(settingsScancodes));
+        Log.i("CYT_KEYS", "HomeKeyService connected. appKeys=" + appKeys + ", settingsKeycodes=" + Arrays.toString(settingsKeycodes) + ", scancodes=" + Arrays.toString(settingsScancodes));
     }
 
     private boolean isSettingsKey(KeyEvent event) {
@@ -68,6 +68,7 @@ public class HomeKeyService extends AccessibilityService {
         }
         String app = appKeys.get(event.getKeyCode());
         if (app != null) {
+            Log.i("CYT_KEYS", "HomeKeyService app button matched: " + app);
             long now = SystemClock.uptimeMillis();
             if (now - lastAppTrigger > 400) {
                 lastAppTrigger = now;
