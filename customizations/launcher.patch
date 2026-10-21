@@ -89,8 +89,79 @@ index 5b9d071..78bfabd 100644
      /** Keys of the movable tiles in their current order, for Order (empty dock slots are not tiles). */
      List<String> movableKeys() {
          List<String> keys = new ArrayList<>();
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/Config.java b/launcher/app/src/main/java/com/gathin/tvhome/Config.java
+index 8f41173..07e9012 100644
+--- a/launcher/app/src/main/java/com/gathin/tvhome/Config.java
++++ b/launcher/app/src/main/java/com/gathin/tvhome/Config.java
+@@ -82,6 +82,8 @@ final class Config {
+     final int skyIntensity;
+     /** Remote keycodes that open Settings through HomeKeyService (config.xml, settings_key_keycodes). */
+     final int[] settingsKeycodes;
++    /** Remote scancodes that open Settings through HomeKeyService (config.xml, settings_key_scancodes). */
++    final int[] settingsScancodes;
+     /** Extra keycodes that open the input switcher in InputKeyService (config.xml input_key_keycodes). */
+     final int[] inputKeycodes;
+     /** Remote buttons that open an app, "keycode:package" or "KEYCODE_NAME:package" (config.xml app_keys). */
+@@ -111,7 +113,7 @@ final class Config {
+                    int columns, int rowsBelowDock, boolean animations, boolean advancedEffects,
+                    boolean shamsiDate, String greetingName, boolean moduleCards, boolean reducedMotion, boolean dockTitle, boolean dockRow, boolean reorderButton, String vpnApp,
+                    boolean showHomeSettingsShortcut, boolean showStats, boolean appLibrary, int backgroundColor, int skyIntensity,
+-                   int[] settingsKeycodes, boolean settingsKeyPanel, boolean wallpaperEnabled, File wallpaper, List<File> wallpapers,
++                   int[] settingsKeycodes, int[] settingsScancodes, boolean settingsKeyPanel, boolean wallpaperEnabled, File wallpaper, List<File> wallpapers,
+                    int wallpaperRotationMinutes, int wallpaperDim, boolean overlayApplied,
+                    Festival festival, int[] inputKeycodes, List<String> appKeys,
+                    List<RaceWeekend.Race> raceCalendar, boolean cinematicHome) {
+@@ -146,6 +148,7 @@ final class Config {
+         this.backgroundColor = backgroundColor;
+         this.skyIntensity = skyIntensity;
+         this.settingsKeycodes = settingsKeycodes;
++        this.settingsScancodes = settingsScancodes;
+         this.settingsKeyPanel = settingsKeyPanel;
+         this.wallpaperEnabled = wallpaperEnabled;
+         this.wallpaper = wallpaper;
+@@ -194,6 +197,7 @@ final class Config {
+         int background = 0xFF000000;
+         int skyIntensity = res.getInteger(R.integer.sky_intensity);
+         int[] settingsKeycodes = res.getIntArray(R.array.settings_key_keycodes);
++        int[] settingsScancodes = res.getIntArray(R.array.settings_key_scancodes);
+         boolean settingsKeyPanel = res.getBoolean(R.bool.settings_key_panel);
+         int[] inputKeycodes = res.getIntArray(R.array.input_key_keycodes);
+         List<String> appKeys = new ArrayList<>(Arrays.asList(res.getStringArray(R.array.app_keys)));
+@@ -234,6 +238,7 @@ final class Config {
+             background = color(json, "background_color", background);
+             skyIntensity = integer(json, "sky_intensity", skyIntensity, 0, 100);
+             settingsKeycodes = intArray(json, "settings_key_keycodes", settingsKeycodes);
++            settingsScancodes = intArray(json, "settings_key_scancodes", settingsScancodes);
+             settingsKeyPanel = bool(json, "settings_key_panel", settingsKeyPanel);
+             inputKeycodes = intArray(json, "input_key_keycodes", inputKeycodes);
+             appKeys = stringList(json, "app_keys", appKeys);
+@@ -289,7 +294,7 @@ final class Config {
+                 panelAction, inputAction,
+                 Math.max(1, columns), Math.max(0, rowsBelow), animations, advancedEffects,
+                 shamsi, greetingName, moduleCards, reducedMotion, dockTitle, dockRow, reorderButton, vpn, homeSettings, showStats, library, background,
+-                Math.max(0, Math.min(100, skyIntensity)), settingsKeycodes, settingsKeyPanel, wallpaperEnabled, wallpaper,
++                Math.max(0, Math.min(100, skyIntensity)), settingsKeycodes, settingsScancodes, settingsKeyPanel, wallpaperEnabled, wallpaper,
+                 wallpapers, rotationMinutes, wallpaperDim, applied,
+                 festival, inputKeycodes, appKeys, json == null ? Collections.emptyList() : raceCalendar(json), cinematic);
+     }
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java b/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java
+index 2cc4aa2..dc614a2 100644
+--- a/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java
++++ b/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java
+@@ -30,9 +30,9 @@ public class HomeKeyService extends AccessibilityService {
+     @Override
+     protected void onServiceConnected() {
+         super.onServiceConnected();
+-        settingsScancodes = getResources().getIntArray(R.array.settings_key_scancodes);
+-        // Keycodes and the panel choice can also come from a theme; theme.sh restarts this service.
++        // Scancodes, keycodes and the panel choice come from config.xml or config.json.
+         Config config = Config.load(this);
++        settingsScancodes = config.settingsScancodes;
+         settingsKeycodes = config.settingsKeycodes;
+         settingsPanel = config.settingsKeyPanel;
+         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
-index c38133e..28f7f5a 100644
+index c38133e..ed7803d 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 @@ -3,6 +3,7 @@ package com.gathin.tvhome;
@@ -110,7 +181,15 @@ index c38133e..28f7f5a 100644
  import android.media.tv.TvContract;
  import android.media.tv.TvInputInfo;
  import android.media.tv.TvInputManager;
-@@ -208,6 +211,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -163,6 +166,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+     private boolean moduleCards;
+     /** config settings_key_keycodes / settings_key_panel, so the Settings button works on Home without HomeKeyService. */
+     private int[] settingsKeycodes = new int[0];
++    private int[] settingsScancodes = new int[0];
+     private boolean settingsKeyPanel;
+     /** Calmer motion for weak GPUs (config.xml, reduced_motion): stiff spring, short fades, no replay. */
+     private boolean reducedMotion;
+@@ -208,6 +212,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      private boolean libraryFocusPending;
      private RecyclerView.OnScrollListener pendingFocusScroll;
  
@@ -131,7 +210,7 @@ index c38133e..28f7f5a 100644
      private final Handler handler = new Handler(Looper.getMainLooper());
      /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
      private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
-@@ -231,6 +248,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -231,6 +249,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          @Override
          public void onInputRemoved(String inputId) {
              updateInputsButton();
@@ -147,7 +226,7 @@ index c38133e..28f7f5a 100644
          }
      };
      /** Listens for any VPN coming up or going down, even one this app's traffic is excluded from. */
-@@ -264,6 +290,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -264,6 +291,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              updateWifiLabel();
              sky.update();
              wallpaperPlayer.update();
@@ -156,7 +235,15 @@ index c38133e..28f7f5a 100644
              handler.postDelayed(this, MINUTE_MS);
          }
      };
-@@ -483,10 +511,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -276,6 +305,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+         // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
+         Config cfg = Config.load(this);
+         settingsKeycodes = cfg.settingsKeycodes;
++        settingsScancodes = cfg.settingsScancodes;
+         settingsKeyPanel = cfg.settingsKeyPanel;
+         COLUMNS = cfg.columns;
+         animations = cfg.animations;
+@@ -483,10 +513,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          btnReorder.setOnClickListener(v -> toggleReorder());
          btnReorder.setVisibility(cfg.reorderButton ? View.VISIBLE : View.GONE);
          btnSettings.setOnLongClickListener(v -> {
@@ -184,7 +271,7 @@ index c38133e..28f7f5a 100644
          // Keep focus on the top bar at its ends and at the top: Android's focus finder would otherwise
          // jump to a tile far below when there is nothing in that direction.
          boolean rtlMenuBar = getResources().getBoolean(R.bool.rtl_menu_bar);
-@@ -578,6 +622,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -578,6 +624,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onResume() {
          super.onResume();
@@ -192,7 +279,7 @@ index c38133e..28f7f5a 100644
          // A festival that started or ended while Home was in the background: rebuild with or without it.
          if (festive != festival.active(LocalDate.now())) {
              recreate();
-@@ -593,6 +638,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -593,6 +640,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          updateRace();
          updateWifiLabel();
          updateInputsButton();
@@ -200,7 +287,7 @@ index c38133e..28f7f5a 100644
          if (showStats) startStats();
          sky.update();
          wallpaperPlayer.start();
-@@ -692,6 +738,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -692,6 +740,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onPause() {
          super.onPause();
@@ -209,7 +296,7 @@ index c38133e..28f7f5a 100644
          endReorder();   // Home or another app while reordering keeps the order so far
          wallpaperPlayer.stop();
          stopAmbientAnimation();
-@@ -727,6 +775,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -727,6 +777,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onDestroy() {
          super.onDestroy();
@@ -217,7 +304,36 @@ index c38133e..28f7f5a 100644
          wallpaperPlayer.close();
          ConnectivityManager cm = getSystemService(ConnectivityManager.class);
          TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
-@@ -770,6 +819,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -744,6 +795,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+      * nothing even on Home.
+      */
+     private boolean handleSettingsKey(KeyEvent event) {
++        if (event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS) {
++            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
++                open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
++                        : systemIntent(Settings.ACTION_SETTINGS));
++            }
++            return true;
++        }
+         for (int code : settingsKeycodes) {
+             if (event.getKeyCode() != code) continue;
+             if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+@@ -752,6 +810,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+             }
+             return true;
+         }
++        for (int code : settingsScancodes) {
++            if (event.getScanCode() != code) continue;
++            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
++                open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
++                        : systemIntent(Settings.ACTION_SETTINGS));
++            }
++            return true;
++        }
+         return false;
+     }
+ 
+@@ -770,6 +836,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      public boolean dispatchKeyEvent(KeyEvent event) {
          if (handleSettingsKey(event)) return true;
@@ -242,7 +358,7 @@ index c38133e..28f7f5a 100644
          if (!reordering) return super.dispatchKeyEvent(event);
          if (dockEditing) return dispatchDockEdit(event);
          boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
-@@ -1019,7 +1086,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1019,7 +1103,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
  
      @Override
      public void onBackPressed() {
@@ -262,7 +378,7 @@ index c38133e..28f7f5a 100644
      }
  
      // ---- glass highlight -------------------------------------------------------------------------
-@@ -1112,9 +1190,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1112,9 +1207,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              }
              showHero(position, scroll ? r.top - dy : r.top);
          } else {
@@ -273,7 +389,7 @@ index c38133e..28f7f5a 100644
              // Scroll just enough so the whole glass (not only the tile) is visible.
              revealRect.set(0, -(int) pad * 2, item.getWidth(), item.getHeight() + (int) pad);
              grid.requestChildRectangleOnScreen(item, revealRect, reducedMotion);
-@@ -1657,6 +1733,46 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1657,6 +1750,46 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          return true;
      }
  
@@ -320,7 +436,7 @@ index c38133e..28f7f5a 100644
      @Override public void onLibraryFocused() {
          libraryFocusPending = false;
          hideGlass();
-@@ -1861,6 +1977,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1861,6 +1994,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              if (!online) {
                  text = getString(R.string.offline);
                  vpn = false;
@@ -328,7 +444,7 @@ index c38133e..28f7f5a 100644
              } else if (ethernet) {
                  text = getString(R.string.ethernet);
                  icon = R.drawable.ic_ethernet;
-@@ -1878,29 +1995,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1878,29 +2012,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              }
          } catch (Exception ignored) {
          }
@@ -361,7 +477,7 @@ index c38133e..28f7f5a 100644
          if (festive && diya != null) {
              if (online && flame == 0) flame = 3;   // online some other way (cellular, USB tethering)
              diya.setSteady(steady);
-@@ -2259,23 +2356,225 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2259,23 +2373,225 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
  
      // ---- launcher settings and module cards -------------------------------------------------------
  
@@ -1157,7 +1273,7 @@ index e83b7f9..6293ad9 100644
 +    <bool name="date_single_line">false</bool>
  </resources>
 diff --git a/launcher/app/src/main/res/values/config.xml b/launcher/app/src/main/res/values/config.xml
-index 3deebbe..4eeb91f 100644
+index 3deebbe..dd05949 100644
 --- a/launcher/app/src/main/res/values/config.xml
 +++ b/launcher/app/src/main/res/values/config.xml
 @@ -9,24 +9,28 @@
@@ -1206,6 +1322,22 @@ index 3deebbe..4eeb91f 100644
      </string-array>
  
      <!-- TVs with no TvInputManager have no HDMI list to read, but their own source-selection panel
+@@ -71,11 +77,14 @@
+          settings panel) on scancode 240 (KEY_UNKNOWN), the scancode several TCL buttons share. Find the keycode
+          with `tools/tv.py 'logcat -v time -s InputReader:D'` while pressing the button. Leave empty to omit. -->
+     <integer-array name="settings_key_keycodes">
++        <item>83</item>
++        <item>82</item>
++        <item>176</item>
+     </integer-array>
+     <!-- What those Settings buttons open: false, the TV's Settings; true, a small glass panel at the top right
+          with TV settings, Display, Network, Apps (re-enable an app) and Launcher settings, over whatever is on screen.
+          Both keys can also be set from a theme's config.json ("settings_key_keycodes": [83]). -->
+-    <bool name="settings_key_panel">false</bool>
++    <bool name="settings_key_panel">true</bool>
+ 
+     <!-- More remote buttons that open the input switcher, by Android keycode (INPUT_KEY_SERVICE=1
+          build-and-install.sh; KEYCODE_TV always does). For buttons only a disabled app answered: the Xiaomi
 diff --git a/launcher/app/src/main/res/values/strings.xml b/launcher/app/src/main/res/values/strings.xml
 index 58d2338..0ba2c98 100644
 --- a/launcher/app/src/main/res/values/strings.xml

@@ -25,7 +25,9 @@ Usage:
 
 Commands:
   apply [list_path] [tv_ip]     (Default) Apply debloat list, configure AdGuard DNS,
-                                and install customized Apple TV 4K-style launcher.
+                                install launcher, and configure remote buttons.
+  buttons [btn_path] [tv_ip]    Configure remote buttons (Settings key, inputs, apps)
+                                using a per-TV .buttons.txt configuration file.
   discover [tv_ip] [out_file]   Connect to a TV, audit all packages, and generate
                                 a candidate debloat list under tv/<brand>/<model>.txt.
   verify [tv_ip]                Verify Home launcher status, AdGuard DNS ad-blocking,
@@ -35,8 +37,12 @@ Help:
   -h, --help, help              Show this help reference.
 
 Examples:
-  # Deploy Hisense U7N setup:
+  # Deploy Hisense U7N setup (auto-applies tv/hisense/u7n.buttons.txt):
   ./setup.sh tv/hisense/u7n.txt 10.0.10.25
+
+  # Configure or update remote buttons only:
+  ./setup.sh buttons tv/hisense/u7n.buttons.txt 10.0.10.25
+  ./setup.sh buttons 10.0.10.25
 
   # Deploy TCL TV setup:
   ./setup.sh tv/tcl/model.txt 10.0.10.26
@@ -73,6 +79,9 @@ if [ "${1:-}" == "discover" ]; then
 elif [ "${1:-}" == "verify" ]; then
     COMMAND="verify"
     shift
+elif [ "${1:-}" == "buttons" ]; then
+    COMMAND="buttons"
+    shift
 fi
 
 # -----------------------------------------------------------------------------
@@ -82,6 +91,7 @@ PARAM1="${1:-}"
 PARAM2="${2:-}"
 
 DEBLOAT_LIST="${DEBLOAT_LIST:-}"
+BUTTONS_FILE="${BUTTONS_FILE:-}"
 TV_HOST="${TV_HOST:-10.0.10.25}"
 TV_PORT="${TV_PORT:-5555}"
 OUTPUT_FILE=""
@@ -104,13 +114,27 @@ if [ "$COMMAND" == "discover" ]; then
             fi
         fi
     done
+elif [ "$COMMAND" == "buttons" ]; then
+    for p in "$PARAM1" "$PARAM2"; do
+        if [ -n "$p" ]; then
+            if is_ip "$p"; then
+                TV_HOST="$p"
+            else
+                BUTTONS_FILE="$p"
+            fi
+        fi
+    done
 else
     for p in "$PARAM1" "$PARAM2"; do
         if [ -n "$p" ]; then
             if is_ip "$p"; then
                 TV_HOST="$p"
             elif is_file_path "$p"; then
-                DEBLOAT_LIST="$p"
+                if [[ "$p" == *.buttons.txt ]]; then
+                    BUTTONS_FILE="$p"
+                else
+                    DEBLOAT_LIST="$p"
+                fi
             elif [ -z "$DEBLOAT_LIST" ]; then
                 DEBLOAT_LIST="$p"
             fi
@@ -134,6 +158,176 @@ ensure_connected() {
         echo "Error: Unable to communicate with $TARGET. Make sure USB debugging is ON."
         exit 1
     fi
+}
+
+# -----------------------------------------------------------------------------
+# Remote Button Config Parser & Deployer
+# -----------------------------------------------------------------------------
+parse_buttons_file() {
+    local file="$1"
+    local panel="true"
+    local -a settings_keycodes=()
+    local -a settings_scancodes=()
+    local -a input_keycodes=()
+    local -a app_keys=()
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        [[ -z "$line" || "$line" =~ ^# ]] && continue
+
+        local key val
+        key="$(echo "$line" | sed -E 's/[[:space:]]*[:=][[:space:]]*/=/' | cut -d'=' -f1 | tr '[:upper:]' '[:lower:]')"
+        val="$(echo "$line" | sed -E 's/[[:space:]]*[:=][[:space:]]*/=/' | cut -d'=' -f2-)"
+
+        case "$key" in
+            settings_panel|settings_key_panel)
+                if [[ "$val" =~ ^(false|0|no)$ ]]; then
+                    panel="false"
+                else
+                    panel="true"
+                fi
+                ;;
+            settings_key|settings_keys|settings_keycode|settings_keycodes)
+                IFS=',' read -ra ADDR <<< "$val"
+                for i in "${ADDR[@]}"; do
+                    i="$(echo "$i" | tr -d ' ')"
+                    [ -n "$i" ] && settings_keycodes+=("$i")
+                done
+                ;;
+            settings_scancode|settings_scancodes)
+                IFS=',' read -ra ADDR <<< "$val"
+                for i in "${ADDR[@]}"; do
+                    i="$(echo "$i" | tr -d ' ')"
+                    [ -n "$i" ] && settings_scancodes+=("$i")
+                done
+                ;;
+            input_key|input_keys|input_keycode|input_keycodes)
+                IFS=',' read -ra ADDR <<< "$val"
+                for i in "${ADDR[@]}"; do
+                    i="$(echo "$i" | tr -d ' ')"
+                    [ -n "$i" ] && input_keycodes+=("$i")
+                done
+                ;;
+            app_key|app_keys)
+                IFS=',' read -ra ADDR <<< "$val"
+                for i in "${ADDR[@]}"; do
+                    i="$(echo "$i" | tr -d ' ')"
+                    [ -n "$i" ] && app_keys+=("\"$i\"")
+                done
+                ;;
+        esac
+    done < "$file"
+
+    if [ "${#settings_keycodes[@]}" -eq 0 ]; then
+        settings_keycodes=("83")
+    fi
+
+    local sk_json ik_json ss_json ak_json
+    sk_json="$(IFS=,; echo "[${settings_keycodes[*]}]")"
+    ss_json="$(IFS=,; echo "[${settings_scancodes[*]}]")"
+    ik_json="$(IFS=,; echo "[${input_keycodes[*]}]")"
+    ak_json="$(IFS=,; echo "[${app_keys[*]}]")"
+
+    cat <<EOF
+{
+  "settings_key_panel": $panel,
+  "settings_key_keycodes": $sk_json,
+  "settings_key_scancodes": $ss_json,
+  "input_key_keycodes": $ik_json,
+  "app_keys": $ak_json
+}
+EOF
+}
+
+push_buttons_config() {
+    local btn_file="$1"
+    local target="$2"
+    if [ ! -f "$btn_file" ]; then
+        return 0
+    fi
+    echo "Configuring remote buttons from $btn_file..."
+    local json
+    json="$(parse_buttons_file "$btn_file")"
+    local tmp_file
+    tmp_file="$(mktemp /tmp/tvhome_config.XXXXXX.json)"
+    echo "$json" > "$tmp_file"
+
+    local remote_dir="/sdcard/Android/data/com.gathin.tvhome/files"
+    local remote_tmp="/data/local/tmp/cyt-theme-config.json"
+    adb -s "$target" push "$tmp_file" "$remote_tmp" >/dev/null 2>&1
+    adb -s "$target" shell "mkdir -p $remote_dir 2>/dev/null; cp $remote_tmp $remote_dir/config.json 2>/dev/null || content write --uri content://com.gathin.tvhome.theme/config.json < $remote_tmp; rm -f $remote_tmp" >/dev/null 2>&1
+    rm -f "$tmp_file"
+
+    # Reload launcher & accessibility services
+    adb -s "$target" shell '
+        cur=$(settings get secure enabled_accessibility_services)
+        am force-stop com.gathin.tvhome
+        am start -n com.gathin.tvhome/.MainActivity >/dev/null 2>&1
+        case "$cur" in
+            *com.gathin.tvhome*)
+                sleep 1
+                settings put secure enabled_accessibility_services ""
+                settings put secure accessibility_enabled 0
+                sleep 1
+                settings put secure enabled_accessibility_services "$cur"
+                settings put secure accessibility_enabled 1
+                ;;
+        esac
+    ' >/dev/null 2>&1 || true
+    echo "Remote buttons successfully deployed & services reloaded on $target."
+}
+
+# =============================================================================
+# SUBCOMMAND: BUTTONS
+# =============================================================================
+do_buttons() {
+    echo "========================================================"
+    echo "Android TV Remote Button Configuration"
+    echo "Target Device: $TARGET"
+    echo "========================================================"
+    ensure_connected
+
+    if [ -z "$BUTTONS_FILE" ]; then
+        AVAILABLE_BTN=()
+        if [ -d "$TV_DIR" ]; then
+            while IFS= read -r f; do
+                AVAILABLE_BTN+=("${f#$SCRIPT_DIR/}")
+            done < <(find "$TV_DIR" -type f -name "*.buttons.txt" | sort)
+        fi
+
+        if [ -t 0 ] && [ "${#AVAILABLE_BTN[@]}" -gt 1 ]; then
+            echo "Select a button configuration file to apply:"
+            select opt in "${AVAILABLE_BTN[@]}"; do
+                if [ -n "$opt" ]; then
+                    BUTTONS_FILE="$opt"
+                    break
+                fi
+            done
+        elif [ "${#AVAILABLE_BTN[@]}" -ge 1 ]; then
+            BUTTONS_FILE="${AVAILABLE_BTN[0]}"
+            echo "Auto-selected button config: $BUTTONS_FILE"
+        else
+            BUTTONS_FILE="tv/hisense/u7n.buttons.txt"
+        fi
+    fi
+
+    if [ ! -f "$BUTTONS_FILE" ] && [ -f "$SCRIPT_DIR/$BUTTONS_FILE" ]; then
+        BUTTONS_FILE="$SCRIPT_DIR/$BUTTONS_FILE"
+    fi
+
+    if [ ! -f "$BUTTONS_FILE" ]; then
+        echo "Error: Button configuration file not found at '$BUTTONS_FILE'"
+        if [ -d "$TV_DIR" ]; then
+            echo "Available button configs in ./tv/:"
+            find "$TV_DIR" -type f -name "*.buttons.txt" | sed "s|$SCRIPT_DIR/|  - |"
+        fi
+        exit 1
+    fi
+
+    push_buttons_config "$BUTTONS_FILE" "$TARGET"
+    echo "========================================================"
+    echo "Remote buttons updated. Test your remote buttons now!"
+    echo "========================================================"
 }
 
 # =============================================================================
@@ -328,6 +522,14 @@ do_verify() {
         echo "       Remote key accessibility services not active. Run setup to enable."
     fi
 
+    # Check configured remote buttons
+    CFG_STAT="$(adb -s "$TARGET" shell "content read --uri content://com.gathin.tvhome.theme/config.json 2>/dev/null || cat /sdcard/Android/data/com.gathin.tvhome/files/config.json 2>/dev/null" | tr -d '\r\n' || true)"
+    if [ -n "$CFG_STAT" ]; then
+        echo "       Remote button profile: Loaded dynamically from config.json"
+    else
+        echo "       Remote button profile: Using built-in defaults (Quick Settings on keycode 83, 82, 176)"
+    fi
+
     echo ""
     # System RAM & Uptime
     FREE_RAM="$(adb -s "$TARGET" shell "dumpsys meminfo 2>/dev/null" | sed -n 's/.*Free RAM: *\([0-9,]*K\).*/\1/p' | head -1 || true)"
@@ -498,6 +700,18 @@ do_apply() {
         adb -s "$TARGET" shell "pm uninstall $pkg" >/dev/null 2>&1 || true
     done
 
+    # -----------------------------------------------------------------------------
+    # Apply Remote Button Mappings
+    # -----------------------------------------------------------------------------
+    if [ -n "$BUTTONS_FILE" ] && [ -f "$BUTTONS_FILE" ]; then
+        push_buttons_config "$BUTTONS_FILE" "$TARGET"
+    else
+        CANDIDATE_BTN="${DEBLOAT_LIST%.txt}.buttons.txt"
+        if [ -f "$CANDIDATE_BTN" ]; then
+            push_buttons_config "$CANDIDATE_BTN" "$TARGET"
+        fi
+    fi
+
     echo "Starting CleanYourTV Home..."
     adb -s "$TARGET" shell "am force-stop com.gathin.tvhome && am start -n com.gathin.tvhome/.MainActivity" >/dev/null 2>&1
 
@@ -514,5 +728,6 @@ do_apply() {
 case "$COMMAND" in
     discover) do_discover ;;
     verify)   do_verify ;;
+    buttons)  do_buttons ;;
     apply)    do_apply ;;
 esac

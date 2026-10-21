@@ -166,6 +166,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean moduleCards;
     /** config settings_key_keycodes / settings_key_panel, so the Settings button works on Home without HomeKeyService. */
     private int[] settingsKeycodes = new int[0];
+    private int[] settingsScancodes = new int[0];
     private boolean settingsKeyPanel;
     /** Calmer motion for weak GPUs (config.xml, reduced_motion): stiff spring, short fades, no replay. */
     private boolean reducedMotion;
@@ -304,6 +305,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
         Config cfg = Config.load(this);
         settingsKeycodes = cfg.settingsKeycodes;
+        settingsScancodes = cfg.settingsScancodes;
         settingsKeyPanel = cfg.settingsKeyPanel;
         COLUMNS = cfg.columns;
         animations = cfg.animations;
@@ -793,8 +795,23 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * nothing even on Home.
      */
     private boolean handleSettingsKey(KeyEvent event) {
+        if (event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS) {
+            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+                open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
+                        : systemIntent(Settings.ACTION_SETTINGS));
+            }
+            return true;
+        }
         for (int code : settingsKeycodes) {
             if (event.getKeyCode() != code) continue;
+            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+                open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
+                        : systemIntent(Settings.ACTION_SETTINGS));
+            }
+            return true;
+        }
+        for (int code : settingsScancodes) {
+            if (event.getScanCode() != code) continue;
             if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
                 open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
                         : systemIntent(Settings.ACTION_SETTINGS));

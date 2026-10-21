@@ -79,9 +79,10 @@ You can view the full command reference and examples directly from your terminal
 
 | Command / Syntax | Purpose |
 |---|---|
-| `./setup.sh <list_path> [tv_ip]` | **Apply Setup:** Debloats TV, configures AdGuard DNS, installs custom launcher, and runs verification. |
+| `./setup.sh <list_path> [tv_ip]` | **Apply Setup:** Debloats TV, configures AdGuard DNS, installs custom launcher, deploys remote buttons, and runs verification. |
+| `./setup.sh buttons [btn_path] [tv_ip]` | **Remote Buttons:** Configures remote buttons (Settings, inputs, app buttons) using a per-TV `.buttons.txt` profile without redebloating. |
 | `./setup.sh discover [tv_ip] [output_file]` | **Audit TV:** Scans installed packages on a TV and generates a categorized debloat candidate list. |
-| `./setup.sh verify [tv_ip]` | **Health Check:** Verifies Home launcher, DNS ad-blocking, AppOps starvation, and system RAM. |
+| `./setup.sh verify [tv_ip]` | **Health Check:** Verifies Home launcher, DNS ad-blocking, AppOps starvation, remote services, and system RAM. |
 | `./setup.sh` | **Interactive Menu:** Scans `./tv/` for debloat lists and presents an interactive menu. |
 | `./setup.sh --help` / `-h` | Displays the built-in command reference and examples. |
 
@@ -152,6 +153,43 @@ To verify whether a TV's debloat, custom launcher, and ad-blocking DNS are worki
   * **Disabled Packages:** Reports the total count of disabled bloatware.
   * **Background Starvation:** Confirms AppOps background execution denial for protected telemetry services.
   * **System Memory:** Reports current free RAM and system status.
+
+---
+
+## Workflow 4: Per-TV Remote Button Mapping (`buttons`)
+
+When stock Google TV (`launcherx`) is disabled, remotes that route special keys through Google TV (such as the **Settings / Gear** button or dedicated streaming app buttons) can become unmapped.
+
+CleanYourTV resolves this by handling button mapping natively, configured via companion `tv/<brand>/<model>.buttons.txt` files:
+
+### File Format (`tv/<brand>/<model>.buttons.txt`)
+```text
+# Remote Button Configuration
+# Target Device: Hisense U7N (Google TV)
+
+# Open Quick Settings glass panel (true) or full Android settings (false)
+SETTINGS_PANEL=true
+
+# Keycodes that open Settings / Quick Settings (e.g. 83 for Google TV / Hisense remote)
+SETTINGS_KEYCODES=83
+
+# Optional: Scancodes that open Settings (for remotes sending unmapped Linux scancodes)
+# SETTINGS_SCANCODES=
+
+# Optional: Keycodes that open Input Switcher
+# INPUT_KEYCODES=178
+
+# Optional: Dedicated App Buttons (format: KEYCODE:PACKAGE or KEYCODE_NAME:PACKAGE)
+# APP_KEYS=190:com.google.android.youtube.tv
+# APP_KEYS=191:com.netflix.ninja
+```
+
+### Applying Button Mappings
+* **Automatic on Deploy:** When you run `./setup.sh tv/<brand>/<model>.txt <ip>`, `setup.sh` automatically checks for a matching `tv/<brand>/<model>.buttons.txt` and deploys it.
+* **On-Demand Update:** To update remote buttons without re-running the full debloat process:
+  ```bash
+  ./setup.sh buttons tv/hisense/u7n.buttons.txt 10.0.10.25
+  ```
 
 ---
 

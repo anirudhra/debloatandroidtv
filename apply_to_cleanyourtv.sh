@@ -30,6 +30,7 @@ if [ ! -d "$TARGET_DIR" ]; then
     echo "Cloning upstream CleanYourTV into '$TARGET_DIR'..."
     git clone https://github.com/Gathin23/cleanyourtv.git "$TARGET_DIR"
 fi
+TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
 
 echo "Applying customizations to '$TARGET_DIR'..."
 
@@ -44,6 +45,8 @@ mkdir -p "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome"
 cp "$CUSTOM_DIR/banner_youtube.png" "$TARGET_DIR/launcher/app/src/main/res/drawable/"
 cp "$CUSTOM_DIR/ic_wifi_off.xml" "$TARGET_DIR/launcher/app/src/main/res/drawable/"
 cp "$CUSTOM_DIR/MainActivity.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
+cp "$CUSTOM_DIR/Config.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
+cp "$CUSTOM_DIR/HomeKeyService.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/AppAdapter.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/Sleep.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/SleepService.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
