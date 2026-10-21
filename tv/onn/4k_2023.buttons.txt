@@ -1,0 +1,27 @@
+# Remote Button Configuration
+# Target Device: Walmart Onn 4K Google TV (2023 Edition) - Reference G10 Remote
+#
+# Syntax:
+#   SETTINGS_PANEL=true|false        # Open Quick Settings glass panel (true) or full Android settings (false)
+#   SETTINGS_KEYCODES=83             # Android keycodes that open Settings (83 on Google G10 remote)
+#   SETTINGS_SCANCODES=              # Linux scancodes for Settings (optional)
+#   INPUT_KEYCODES=                  # Android keycodes that open Input switcher (optional)
+#   APP_KEYS=KEYCODE:PACKAGE         # Dedicated app buttons (e.g. 190:io.gh.reisxd.tizentube.cobalt)
+
+SETTINGS_PANEL=true
+SETTINGS_KEYCODES=83
+
+# --- Active App Button Mappings ---
+# YouTube button (G10 remote standard keyCode 190) -> TizenTube
+APP_KEYS=190:io.gh.reisxd.tizentube.cobalt
+
+# --- Reserved / Unmapped Onn G10 Remote Buttons ---
+# TV / Live TV button: keyCode 170 (or 165)
+# Netflix button:      keyCode 191
+# Disney+ button:      keyCode 192
+# Paramount+ button:   keyCode 193
+#
+# Example future mappings:
+# APP_KEYS=191:com.netflix.ninja
+# APP_KEYS=192:com.disney.disneyplus
+# APP_KEYS=193:com.paramountplus.google

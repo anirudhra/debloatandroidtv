@@ -1,0 +1,36 @@
+# Walmart Onn 4K Streaming Box (2023 / Amlogic S905Y4 / Google TV)
+# Target Device: Onn 4K Google TV (2023 Edition)
+#
+# Safe to disable with:
+#   adb shell pm disable-user --user 0 <package>
+#
+# IMPORTANT SAFETY FOR ONN / AMLOGIC:
+# Do NOT disable:
+#   - com.droidlogic.*               (Amlogic display & audio hardware drivers)
+#   - com.google.android.tv.frameworkpackagestubs (Core TV stubs)
+#   - com.google.android.apps.mediashell (Google Cast / Chromecast built-in)
+#   - com.android.bluetooth          (Bluetooth remote connection)
+
+# --- Google Tracking, Partner Auto-Installers & Unused Services ---
+android.autoinstalls.config.google.gtvpai
+com.google.android.partnersetup
+com.google.android.feedback
+com.android.printspooler
+com.google.android.syncadapters.calendar
+com.android.providers.calendar
+com.android.providers.contacts
+com.google.android.marvin.talkback
+com.google.android.play.games
+com.google.android.apps.tv.dreamx
+com.google.android.videos
+
+# --- Stock YouTube Apps (Replaced by Ad-Free TizenTube / Tube) ---
+com.google.android.youtube.tv
+com.google.android.youtube.tvmusic
+
+# --- Optional Preinstalled Streaming Apps (Uncomment to disable if not used) ---
+# com.netflix.ninja
+# com.disney.disneyplus
+# com.hulu.livingroomplus
+# com.paramountplus.google
+# com.wbd.stream

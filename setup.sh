@@ -620,7 +620,7 @@ do_apply() {
         if [ -d "$TV_DIR" ]; then
             while IFS= read -r f; do
                 AVAILABLE_LISTS+=("${f#$SCRIPT_DIR/}")
-            done < <(find "$TV_DIR" -type f -name "*.txt" | sort)
+            done < <(find "$TV_DIR" -type f -name "*.txt" ! -name "*.buttons.txt" | sort)
         fi
 
         if [ -t 0 ] && [ "${#AVAILABLE_LISTS[@]}" -gt 1 ]; then
@@ -648,7 +648,7 @@ do_apply() {
         echo "Error: Debloat list not found at '$DEBLOAT_LIST'"
         if [ -d "$TV_DIR" ]; then
             echo "Available lists in ./tv/:"
-            find "$TV_DIR" -type f -name "*.txt" | sed "s|$SCRIPT_DIR/|  - |"
+            find "$TV_DIR" -type f -name "*.txt" ! -name "*.buttons.txt" | sed "s|$SCRIPT_DIR/|  - |"
         fi
         exit 1
     fi
