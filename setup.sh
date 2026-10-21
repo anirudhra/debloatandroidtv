@@ -2,15 +2,16 @@
 # Multi-Device Android TV Setup, Debloat & Verification Kit
 #
 # Usage:
-#   ./setup.sh <tv_model> [tv_ip] [buttons_profile]  # Apply debloat & custom launcher
-#   ./setup.sh buttons <tv_model|btn_profile> [tv_ip] # Update remote button mappings
-#   ./setup.sh discover [tv_ip] [tv_model]           # Scan TV and generate candidate debloat list
-#   ./setup.sh verify [tv_ip]                        # Verify launcher, DNS, and debloat status
+#   ./setup.sh --tv <model> [--ip <address>]   # Apply debloat, launcher & remote buttons
+#   ./setup.sh --buttons --tv <model>          # Update remote button mappings only
+#   ./setup.sh --discover <model> [--ip <ip>]  # Scan TV and generate candidate debloat list
+#   ./setup.sh --verify [--ip <ip>]            # Verify launcher, DNS, and debloat status
 #
 # Examples:
-#   ./setup.sh u7n 10.0.10.25
-#   ./setup.sh 65q6c 10.0.10.26
-#   ./setup.sh 4k_2023 10.0.10.27
+#   ./setup.sh --tv u7n --ip 10.0.10.25
+#   ./setup.sh --tv 65q6c --ip 10.0.10.26
+#   ./setup.sh --tv 4k_2023 --ip 10.0.10.27
+#   ./setup.sh --buttons --tv u7n
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -22,84 +23,52 @@ show_help() {
 Android TV Debloat & Custom Launcher Setup Kit
 
 Usage:
-  ./setup.sh [COMMAND] [ARGUMENTS...]
+  ./setup.sh [OPTIONS]
 
-Commands:
-  apply [tv_model] [tv_ip] [btn_profile]  (Default) Apply debloat list, configure AdGuard DNS,
-                                         install launcher, and configure remote buttons.
-  buttons [tv_model|btn_profile] [tv_ip]  Configure remote buttons (Settings key, inputs, apps)
-                                         using a per-TV .buttons.txt configuration file.
-  discover [tv_ip] [tv_model]            Connect to a TV, audit all packages, and generate
-                                         a candidate debloat list under tv/<brand>/<model>.debloat.txt.
-  verify [tv_ip]                         Verify Home launcher status, AdGuard DNS ad-blocking,
-                                         disabled bloatware counts, and system RAM health.
-
-Help:
-  -h, --help, help                       Show this help reference.
+Options:
+  --tv, -t <model>          Target TV model (e.g. u7n, 65q6c, 4k_2023)
+  --ip, -i <ip_address>     Target TV IP address (default: 10.0.10.25)
+  --buttons, -b             Configure remote buttons only (no debloat / launcher install)
+  --discover, -d [model]    Audit TV and generate candidate debloat list under tv/<brand>/<model>.debloat.txt
+  --verify, -v              Verify launcher, DNS, and debloat status on TV
+  --help, -h                Show this help reference
 
 Examples:
-  # Deploy Hisense U7N (auto-applies common debloat + tv/hisense/u7n.buttons.txt):
-  ./setup.sh u7n 10.0.10.25
+  # Deploy full setup to Hisense U7N:
+  ./setup.sh --tv u7n --ip 10.0.10.25
+  ./setup.sh --tv u7n
 
-  # Deploy TCL 65Q6C:
-  ./setup.sh 65q6c 10.0.10.26
+  # Deploy full setup to TCL 65Q6C:
+  ./setup.sh --tv 65q6c --ip 10.0.10.26
 
-  # Deploy Walmart Onn 4K (2023):
-  ./setup.sh 4k_2023 10.0.10.27
+  # Deploy full setup to Walmart Onn 4K (2023):
+  ./setup.sh --tv 4k_2023 --ip 10.0.10.27
 
-  # Deploy with a specific custom button profile:
-  ./setup.sh u7n 10.0.10.25 custom_buttons
+  # Configure remote buttons only for a TV:
+  ./setup.sh --buttons --tv u7n --ip 10.0.10.25
+  ./setup.sh --buttons --tv u7n
 
-  # Configure or update remote buttons only:
-  ./setup.sh buttons u7n 10.0.10.25
-  ./setup.sh buttons 10.0.10.25
-
-  # Discover & generate debloat list for a new TV:
-  ./setup.sh discover 10.0.10.26 c645
-  ./setup.sh discover 10.0.10.26
+  # Audit a new TV and generate candidate debloat list:
+  ./setup.sh --discover c645 --ip 10.0.10.26
+  ./setup.sh --discover --ip 10.0.10.26
 
   # Run post-setup health check:
-  ./setup.sh verify 10.0.10.25
+  ./setup.sh --verify --ip 10.0.10.25
+  ./setup.sh --verify
 
   # Interactive mode (prompts with numbered TV menu):
   ./setup.sh
 
 Environment Variables:
-  TV_HOST                                Default target TV IP (default: 10.0.10.25)
-  TV_PORT                                ADB network port (default: 5555)
-  DEBLOAT_LIST                           Path to debloat package list
+  TV_HOST                   Default target TV IP (default: 10.0.10.25)
+  TV_PORT                   ADB network port (default: 5555)
+  TV_MODEL                  Default target TV model
 EOF
 }
 
-# Check for help flag anywhere in arguments
-for arg in "$@"; do
-    if [ "$arg" == "--help" ] || [ "$arg" == "-h" ] || [ "$arg" == "help" ]; then
-        show_help
-        exit 0
-    fi
-done
-
-COMMAND="apply"
-if [ "${1:-}" == "discover" ]; then
-    COMMAND="discover"
-    shift
-elif [ "${1:-}" == "verify" ]; then
-    COMMAND="verify"
-    shift
-elif [ "${1:-}" == "buttons" ]; then
-    COMMAND="buttons"
-    shift
-fi
-
 # -----------------------------------------------------------------------------
-# Common Helpers & Arguments
+# Common Helpers & Resolvers
 # -----------------------------------------------------------------------------
-DEBLOAT_LIST="${DEBLOAT_LIST:-}"
-BUTTONS_FILE="${BUTTONS_FILE:-}"
-TV_HOST="${TV_HOST:-10.0.10.25}"
-TV_PORT="${TV_PORT:-5555}"
-OUTPUT_FILE=""
-
 is_ip() {
     [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "$1" =~ : ]]
 }
@@ -170,51 +139,103 @@ resolve_buttons_file() {
     return 1
 }
 
-if [ "$COMMAND" == "discover" ]; then
-    for p in "$@"; do
-        [ -z "$p" ] && continue
-        if is_ip "$p"; then
-            TV_HOST="$p"
-        else
-            OUTPUT_FILE="$p"
-        fi
-    done
-elif [ "$COMMAND" == "buttons" ]; then
-    for p in "$@"; do
-        [ -z "$p" ] && continue
-        if is_ip "$p"; then
-            TV_HOST="$p"
-        elif [ -z "$BUTTONS_FILE" ]; then
-            if resolved="$(resolve_buttons_file "$p")"; then
-                BUTTONS_FILE="$resolved"
+# -----------------------------------------------------------------------------
+# Command-Line Argument Parsing (--tv, --ip, --buttons, --discover, --verify)
+# -----------------------------------------------------------------------------
+COMMAND="apply"
+TV_MODEL="${TV_MODEL:-}"
+TV_HOST="${TV_HOST:-10.0.10.25}"
+TV_PORT="${TV_PORT:-5555}"
+OUTPUT_FILE=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help|help)
+            show_help
+            exit 0
+            ;;
+        -t|--tv)
+            if [ -n "${2:-}" ] && [[ "$2" != -* ]]; then
+                TV_MODEL="$2"
+                shift 2
             else
-                BUTTONS_FILE="$p"
+                echo "Error: --tv requires a model argument (e.g. --tv u7n)"
+                exit 1
             fi
-        fi
-    done
-elif [ "$COMMAND" == "verify" ]; then
-    for p in "$@"; do
-        [ -z "$p" ] && continue
-        if is_ip "$p"; then
-            TV_HOST="$p"
-        fi
-    done
-else
-    # apply command: [tv_model] [tv_ip] [buttons_profile] in any order
-    for p in "$@"; do
-        [ -z "$p" ] && continue
-        if is_ip "$p"; then
-            TV_HOST="$p"
-        elif [ -z "$DEBLOAT_LIST" ] && resolved="$(resolve_debloat_file "$p")"; then
-            DEBLOAT_LIST="$resolved"
-        elif [ -z "$BUTTONS_FILE" ] && resolved="$(resolve_buttons_file "$p")"; then
-            BUTTONS_FILE="$resolved"
-        elif [ -z "$DEBLOAT_LIST" ]; then
-            DEBLOAT_LIST="$p"
-        elif [ -z "$BUTTONS_FILE" ]; then
-            BUTTONS_FILE="$p"
-        fi
-    done
+            ;;
+        --tv=*)
+            TV_MODEL="${1#*=}"
+            shift
+            ;;
+        -i|--ip)
+            if [ -n "${2:-}" ] && [[ "$2" != -* ]]; then
+                TV_HOST="$2"
+                shift 2
+            else
+                echo "Error: --ip requires an IP address (e.g. --ip 10.0.10.25)"
+                exit 1
+            fi
+            ;;
+        --ip=*)
+            TV_HOST="${1#*=}"
+            shift
+            ;;
+        -b|--buttons)
+            COMMAND="buttons"
+            shift
+            ;;
+        -d|--discover)
+            COMMAND="discover"
+            shift
+            if [ -n "${1:-}" ] && [[ "$1" != -* ]]; then
+                OUTPUT_FILE="$1"
+                shift
+            fi
+            ;;
+        -v|--verify)
+            COMMAND="verify"
+            shift
+            ;;
+        apply)
+            COMMAND="apply"
+            shift
+            ;;
+        buttons)
+            COMMAND="buttons"
+            shift
+            ;;
+        discover)
+            COMMAND="discover"
+            shift
+            ;;
+        verify)
+            COMMAND="verify"
+            shift
+            ;;
+        *)
+            # Support bare arguments if user omits flags:
+            if is_ip "$1"; then
+                TV_HOST="$1"
+            elif [ -z "$TV_MODEL" ]; then
+                TV_MODEL="$1"
+            elif [ -z "$OUTPUT_FILE" ]; then
+                OUTPUT_FILE="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+DEBLOAT_LIST=""
+BUTTONS_FILE=""
+
+if [ -n "$TV_MODEL" ]; then
+    if resolved="$(resolve_debloat_file "$TV_MODEL")"; then
+        DEBLOAT_LIST="$resolved"
+    fi
+    if resolved="$(resolve_buttons_file "$TV_MODEL")"; then
+        BUTTONS_FILE="$resolved"
+    fi
 fi
 
 TARGET="${TV_HOST}:${TV_PORT}"
@@ -878,20 +899,15 @@ do_apply() {
     # -----------------------------------------------------------------------------
     # Apply Remote Button Mappings
     # -----------------------------------------------------------------------------
-    if [ -n "$BUTTONS_FILE" ]; then
-        if [ ! -f "$BUTTONS_FILE" ]; then
-            if resolved="$(resolve_buttons_file "$BUTTONS_FILE")"; then
-                BUTTONS_FILE="$resolved"
-            fi
-        fi
-        if [ -f "$BUTTONS_FILE" ]; then
-            push_buttons_config "$BUTTONS_FILE" "$TARGET"
-        fi
-    else
+    if [ -z "$BUTTONS_FILE" ]; then
         CANDIDATE_BTN="${DEBLOAT_LIST%.debloat.txt}.buttons.txt"
         if [ -f "$CANDIDATE_BTN" ]; then
-            push_buttons_config "$CANDIDATE_BTN" "$TARGET"
+            BUTTONS_FILE="$CANDIDATE_BTN"
         fi
+    fi
+
+    if [ -n "$BUTTONS_FILE" ] && [ -f "$BUTTONS_FILE" ]; then
+        push_buttons_config "$BUTTONS_FILE" "$TARGET"
     fi
 
     echo "Starting CleanYourTV Home..."

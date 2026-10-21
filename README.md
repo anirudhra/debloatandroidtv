@@ -101,10 +101,10 @@ You can view the full command reference and examples directly from your terminal
 
 | Command / Syntax | Purpose |
 |---|---|
-| `./setup.sh <tv_model> [tv_ip] [btn_profile]` | **Apply Setup:** Debloats TV, configures AdGuard DNS, installs custom launcher, deploys remote buttons, and runs verification. |
-| `./setup.sh buttons <tv_model|btn_profile> [tv_ip]` | **Remote Buttons:** Configures remote buttons (Settings, inputs, app buttons) using a per-TV `.buttons.txt` profile without redebloating. |
-| `./setup.sh discover [tv_ip] [tv_model]` | **Audit TV:** Scans installed packages on a TV and generates a categorized debloat candidate list under `tv/<brand>/<model>.debloat.txt`. |
-| `./setup.sh verify [tv_ip]` | **Health Check:** Verifies Home launcher, DNS ad-blocking, AppOps starvation, remote services, and system RAM. |
+| `./setup.sh --tv <model> [--ip <address>]` | **Apply Setup:** Debloats TV, configures AdGuard DNS, installs custom launcher, deploys remote buttons, and runs verification. |
+| `./setup.sh --buttons --tv <model> [--ip <address>]` | **Remote Buttons:** Configures remote buttons using the TV's `.buttons.txt` profile without redebloating. |
+| `./setup.sh --discover [model] [--ip <address>]` | **Audit TV:** Scans installed packages on a TV and generates a categorized debloat candidate list under `tv/<brand>/<model>.debloat.txt`. |
+| `./setup.sh --verify [--ip <address>]` | **Health Check:** Verifies Home launcher, DNS ad-blocking, AppOps starvation, remote services, and system RAM. |
 | `./setup.sh` | **Interactive Menu:** Prompts with a numbered TV model selection menu. |
 | `./setup.sh --help` / `-h` | Displays the built-in command reference and examples. |
 
@@ -121,23 +121,20 @@ You can view the full command reference and examples directly from your terminal
 4. Check your TV's IP address under **Settings** → **Network & Internet**.
 
 ### Step 2: Run Setup
-Run `setup.sh` from your computer, passing your TV model name and your TV's IP address:
+Run `setup.sh` from your computer with `--tv <model>` and `--ip <address>`:
 
 ```bash
 # For Hisense U7N:
-./setup.sh u7n 10.0.10.25
+./setup.sh --tv u7n --ip 10.0.10.25
 
 # For TCL 65Q6C:
-./setup.sh 65q6c 10.0.10.26
+./setup.sh --tv 65q6c --ip 10.0.10.26
 
 # For Walmart Onn 4K (2023):
-./setup.sh 4k_2023 10.0.10.27
-
-# Optional: override with a custom button profile
-./setup.sh u7n 10.0.10.25 custom_buttons
+./setup.sh --tv 4k_2023 --ip 10.0.10.27
 ```
 
-*(Arguments can be supplied in any order. The script automatically applies `tv/common/common.debloat.txt` as a universal base layer, the specified device debloat list, pairs the matching `.buttons.txt` config, takes a pre-flight snapshot in `backup/`, applies background lockdowns, configures AdGuard DNS, installs the custom launcher, grants coarse/fine location for weather, activates `SleepService` for instant standby and the sleep timer, and runs health verification).*
+*(The script automatically applies `tv/common/common.debloat.txt` as a universal base layer, the specified device debloat list, pairs the matching `.buttons.txt` config, takes a pre-flight snapshot in `backup/`, applies background lockdowns, configures AdGuard DNS, installs the custom launcher, grants coarse/fine location for weather, activates `SleepService` for instant standby and the sleep timer, and runs health verification).*
 
 ### Step 3: Secure Your TV
 Once the script finishes:
@@ -147,7 +144,7 @@ Once the script finishes:
 
 > [!NOTE]
 > **After System OTA Updates or Factory Reset:**  
-> If an OTA firmware update resets your home screen or re-enables factory bloatware, simply re-enable USB debugging and run `./setup.sh u7n <ip>` again. Everything will be restored in seconds.
+> If an OTA firmware update resets your home screen or re-enables factory bloatware, simply re-enable USB debugging and run `./setup.sh --tv u7n` again. Everything will be restored in seconds.
 
 ---
 
@@ -156,7 +153,7 @@ Once the script finishes:
 When setting up a new TV (like your upcoming TCL TVs), you don't need to guess package names. Use the built-in auditor:
 
 ```bash
-./setup.sh discover 10.0.10.26 c645
+./setup.sh --discover c645 --ip 10.0.10.26
 ```
 
 * **What it does:**
@@ -172,7 +169,7 @@ When setting up a new TV (like your upcoming TCL TVs), you don't need to guess p
 To verify whether a TV's debloat, custom launcher, and ad-blocking DNS are working at any time:
 
 ```bash
-./setup.sh verify 10.0.10.25
+./setup.sh --verify --ip 10.0.10.25
 ```
 
 * **What it tests:**
@@ -213,10 +210,10 @@ SETTINGS_KEYCODES=83
 ```
 
 ### Applying Button Mappings
-* **Automatic on Deploy:** When you run `./setup.sh <tv_model> <ip>`, `setup.sh` automatically checks for a matching `tv/<brand>/<model>.buttons.txt` and deploys it.
+* **Automatic on Deploy:** When you run `./setup.sh --tv <model> --ip <address>`, `setup.sh` automatically checks for a matching `tv/<brand>/<model>.buttons.txt` and deploys it.
 * **On-Demand Update:** To update remote buttons without re-running the full debloat process:
   ```bash
-  ./setup.sh buttons u7n 10.0.10.25
+  ./setup.sh --buttons --tv u7n --ip 10.0.10.25
   ```
 
 ---
@@ -282,7 +279,7 @@ cp app/build/outputs/apk/release/app-release.apk ~/code/github/debloatandroidtv/
 ### Deploy to Your TV
 Once built, simply run:
 ```bash
-./setup.sh u7n 10.0.10.25
+./setup.sh --tv u7n --ip 10.0.10.25
 ```
 
 ---
