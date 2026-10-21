@@ -6,10 +6,12 @@
 #   SETTINGS_KEYCODES=83             # Android keycodes that open Settings (e.g. 83 for Google TV / Hisense remote)
 #   SETTINGS_SCANCODES=              # Linux scancodes for Settings (optional)
 #   INPUT_KEYCODES=                  # Android keycodes that open Input switcher (optional)
+#   TEMPERATURE_UNIT=celsius|fahrenheit # Primary unit for weather display (secondary in brackets)
 #   APP_KEYS=KEYCODE:PACKAGE         # Dedicated app buttons (e.g. 190:io.gh.reisxd.tizentube.cobalt)
 
 SETTINGS_PANEL=true
 SETTINGS_KEYCODES=83
+TEMPERATURE_UNIT=celsius
 
 # --- Active App Button Mappings ---
 # YouTube button (keyCode 190, scanCode 469) -> TizenTube
@@ -18,13 +20,12 @@ APP_KEYS=190:io.gh.reisxd.tizentube.cobalt
 # Prime Video button (keyCode 295, scanCode 468) -> Prime Video
 APP_KEYS=295:com.amazon.amazonvideo.livingroom
 
+# Disney+ button (keyCode 607, scanCode 418) -> Jellyfin
+APP_KEYS=607:org.jellyfin.androidtv
+
+# Tubi button (keyCode 606, scanCode 419) -> LocalNow
+APP_KEYS=606:com.weathergroup.localnow
+
 # --- Reserved / Unmapped Hisense Remote Buttons (Saved for Future Mapping) ---
-# Disney+ button: keyCode 607 (scanCode 418)
-# Tubi button:    keyCode 606 (scanCode 419)
 # Profile button: keyCode 288 (scanCode 600)
 # Guide button:   keyCode 172 (scanCode 362)
-#
-# Example future mappings:
-# APP_KEYS=607:com.disney.disneyplus
-# APP_KEYS=606:com.tubitv
-# APP_KEYS=172:com.google.android.tv

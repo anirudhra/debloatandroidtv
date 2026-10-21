@@ -49,7 +49,9 @@ final class Weather {
         }
 
         long now = System.currentTimeMillis();
-        if ((now - p.getLong("time", 0) < WEATHER_MS) || running) {
+        boolean metric = isMetricPrimary(app);
+        boolean hasDual = cached != null && cached.contains("(") && (metric ? cached.contains("°C (") : cached.contains("°F ("));
+        if ((now - p.getLong("time", 0) < WEATHER_MS && hasDual) || running) {
             return;
         }
 
@@ -83,12 +85,11 @@ final class Weather {
 
             float lat = p.getFloat("lat", 0);
             float lon = p.getFloat("lon", 0);
-            boolean fahrenheit = isFahrenheitLocale();
-            String unitParam = fahrenheit ? "&temperature_unit=fahrenheit" : "";
 
+            // Fetch in standard metric (Celsius) by default, then compute both C and F
             String url = String.format(Locale.US,
-                    "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,weather_code,is_day%s",
-                    lat, lon, unitParam);
+                    "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,weather_code,is_day",
+                    lat, lon);
 
             byte[] data = httpGet(url, 5000);
             if (data == null) return null;
@@ -97,17 +98,68 @@ final class Weather {
             JSONObject cur = root.getJSONObject("current");
             int code = cur.getInt("weather_code");
             boolean isDay = cur.optInt("is_day", 1) == 1;
-            int temp = (int) Math.round(cur.getDouble("temperature_2m"));
+            double tempC = cur.getDouble("temperature_2m");
+            int c = (int) Math.round(tempC);
+            int f = (int) Math.round(tempC * 9.0 / 5.0 + 32.0);
 
-            return icon(code, isDay) + "  " + temp + "°";
+            boolean metric = isMetricPrimary(ctx);
+            String tempStr = metric ? (c + "°C (" + f + "°F)") : (f + "°F (" + c + "°C)");
+
+            return icon(code, isDay) + "  " + tempStr;
         } catch (Exception e) {
             return null;
         }
     }
 
-    private static boolean isFahrenheitLocale() {
+    private static boolean isMetricPrimary(Context ctx) {
+        // 1. Check Config overlay (config.json / config.xml)
+        try {
+            Config config = Config.load(ctx);
+            if (config.temperatureUnit != null && !config.temperatureUnit.isEmpty()) {
+                if ("celsius".equalsIgnoreCase(config.temperatureUnit) || "metric".equalsIgnoreCase(config.temperatureUnit) || "c".equalsIgnoreCase(config.temperatureUnit)) {
+                    return true;
+                }
+                if ("fahrenheit".equalsIgnoreCase(config.temperatureUnit) || "imperial".equalsIgnoreCase(config.temperatureUnit) || "f".equalsIgnoreCase(config.temperatureUnit)) {
+                    return false;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
+        // 2. Query system settings if available on OEM firmware
+        try {
+            String unit = android.provider.Settings.System.getString(ctx.getContentResolver(), "temperature_unit");
+            if (unit == null) {
+                unit = android.provider.Settings.Global.getString(ctx.getContentResolver(), "temperature_unit");
+            }
+            if (unit != null) {
+                if ("celsius".equalsIgnoreCase(unit) || "metric".equalsIgnoreCase(unit) || "c".equalsIgnoreCase(unit)) {
+                    return true;
+                }
+                if ("fahrenheit".equalsIgnoreCase(unit) || "imperial".equalsIgnoreCase(unit) || "f".equalsIgnoreCase(unit)) {
+                    return false;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
+        // 3. Query ICU Measurement System from Android Locale
+        try {
+            android.icu.util.LocaleData.MeasurementSystem ms =
+                    android.icu.util.LocaleData.getMeasurementSystem(android.icu.util.ULocale.getDefault());
+            if (ms == android.icu.util.LocaleData.MeasurementSystem.SI) {
+                return true;
+            }
+            if (ms == android.icu.util.LocaleData.MeasurementSystem.US) {
+                return false;
+            }
+        } catch (Throwable ignored) {
+        }
+
+        // 4. Default by locale country (US, LR, MM default to Fahrenheit, rest of world defaults to Celsius)
         Locale l = Locale.getDefault();
-        return "US".equalsIgnoreCase(l.getCountry()) || "LR".equalsIgnoreCase(l.getCountry()) || "MM".equalsIgnoreCase(l.getCountry());
+        String country = l.getCountry();
+        return !("US".equalsIgnoreCase(country) || "LR".equalsIgnoreCase(country) || "MM".equalsIgnoreCase(country));
     }
 
     private static boolean locateDevice(Context ctx, SharedPreferences p) {

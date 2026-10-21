@@ -262,6 +262,7 @@ ensure_connected() {
 parse_buttons_file() {
     local file="$1"
     local panel="true"
+    local temp_unit="celsius"
     local -a settings_keycodes=()
     local -a settings_scancodes=()
     local -a input_keycodes=()
@@ -311,6 +312,9 @@ parse_buttons_file() {
                     [ -n "$i" ] && app_keys+=("\"$i\"")
                 done
                 ;;
+            temperature_unit|temp_unit|weather_unit)
+                temp_unit="$val"
+                ;;
         esac
     done < "$file"
 
@@ -330,7 +334,8 @@ parse_buttons_file() {
   "settings_key_keycodes": $sk_json,
   "settings_key_scancodes": $ss_json,
   "input_key_keycodes": $ik_json,
-  "app_keys": $ak_json
+  "app_keys": $ak_json,
+  "temperature_unit": "$temp_unit"
 }
 EOF
 }
