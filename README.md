@@ -15,7 +15,7 @@ debloatandroidtv/
 ├── README.md               # Complete setup, build, and deployment guide
 ├── .gitignore              # Automatically excludes device backups & build artifacts
 ├── LICENSE                 # MIT License
-├── setup.sh                # Multi-device one-click ADB setup script
+├── setup.sh                # Multi-device ADB setup, discovery & verification script
 ├── apply_to_cleanyourtv.sh # Merges customizations into upstream CleanYourTV clone
 ├── bin/
 │   └── tvhome.apk          # Pre-compiled customized launcher APK (ready to deploy)
@@ -30,7 +30,7 @@ debloatandroidtv/
 │   └── ic_wifi_off.xml     # Offline status icon for Wi-Fi pill
 └── tv/                     # Brand & model debloat package lists
     ├── hisense/
-    │   └── u7n.txt         # Hisense U7N debloat list (19 telemetry & bloat packages)
+    │   └── u7n.txt         # Hisense U7N debloat & background lockdown list
     └── tcl/
         └── model.txt       # TCL debloat list (Samba TV ACR, logkit, promo packages)
 ```
@@ -70,7 +70,7 @@ Run `setup.sh` from your computer, passing the path to the target debloat list a
 ./setup.sh tv/tcl/model.txt 10.0.10.26
 ```
 
-*(Arguments can be supplied in any order, e.g. `./setup.sh 10.0.10.25 tv/hisense/u7n.txt`. If omitted, the script presents an interactive list to choose from).*
+*(Arguments can be supplied in any order. The script automatically takes a pre-flight snapshot in `backup/`, applies the debloat & background lockdowns, configures AdGuard DNS, installs the launcher, and runs health verification).*
 
 ### Step 3: Secure Your TV
 Once the script finishes:
@@ -84,86 +84,84 @@ Once the script finishes:
 
 ---
 
-## Workflow 2: Clone Upstream, Merge Customizations, Build & Deploy
+## Workflow 2: Automatic TV Package Discovery (`discover`)
+
+When setting up a new TV (like your upcoming TCL TVs), you don't need to guess package names. Use the built-in auditor:
+
+```bash
+./setup.sh discover 10.0.10.26 tv/tcl/c645.txt
+```
+
+* **What it does:**
+  1. Inspects the connected TV's hardware model, brand, and Android version.
+  2. Scans all installed packages while **strictly protecting** critical OS and hardware framework components (TV inputs, tuner, HDMI, remote pairing).
+  3. Uses pattern matching (`ads`, `analytics`, `telemetry`, `storemode`, `alexa`, `promos`) to group candidates into clean categories.
+  4. Generates a commented, ready-to-use template file at the specified path.
+
+---
+
+## Workflow 3: Health Check & Verification (`verify`)
+
+To verify whether a TV's debloat, custom launcher, and ad-blocking DNS are working at any time:
+
+```bash
+./setup.sh verify 10.0.10.25
+```
+
+* **What it tests:**
+  * **Default Home Launcher:** Confirms `com.gathin.tvhome` is the active Priority 0 Home.
+  * **AdGuard Private DNS:** Validates `private_dns_mode` and verifies ad-domain blocking.
+  * **Disabled Packages:** Reports the total count of disabled bloatware.
+  * **Background Starvation:** Confirms AppOps background execution denial for protected telemetry services.
+  * **System Memory:** Reports current free RAM and system status.
+
+---
+
+## Advanced Feature: Background Lockdown (`lockdown:`)
+
+Certain OEM services trigger Android System Recovery if disabled using `pm disable-user` (e.g. `com.vt.tv.smartsense` and `com.vt.tv.aiot` on Hisense MediaTek firmware).
+
+To silence these services safely without bricking or triggering recovery, prefix them with `lockdown:` in your debloat list:
+
+```text
+# --- Background Lockdown (Starve Background CPU, Do Not Disable) ---
+lockdown:com.vt.tv.smartsense
+lockdown:com.vt.tv.smartsense.ui
+lockdown:com.vt.tv.aiot
+lockdown:com.vt.tv.ai_sense
+```
+
+`setup.sh` automatically uses Android AppOps policies (`RUN_ANY_IN_BACKGROUND ignore` and `RUN_IN_BACKGROUND ignore`) to deny background CPU cycles and stop the services from running, keeping your system 100% stable.
+
+---
+
+## Workflow 4: Clone Upstream, Merge Customizations, Build & Deploy
 
 If you want to pull updates from upstream [CleanYourTV](https://github.com/Gathin23/cleanyourtv), recompile the launcher, or make further modifications:
 
-### Step 1: Clone the Upstream Repository
-Clone the original CleanYourTV repo alongside this repository (e.g., in `~/code/github`):
-
+### Step 1: Clone Upstream
 ```bash
 cd ~/code/github
 git clone https://github.com/Gathin23/cleanyourtv.git
 ```
 
 ### Step 2: Merge Your Customizations
-Run the included helper script to copy your custom code, icons, and layouts into the cloned repo:
-
 ```bash
 cd ~/code/github/debloatandroidtv
 ./apply_to_cleanyourtv.sh ../cleanyourtv
 ```
 
-*Alternative (Manual Git Patch):*
-```bash
-cd ~/code/github/cleanyourtv
-git apply ../debloatandroidtv/customizations/launcher.patch
-```
-
-### Step 3: Build the Custom Release APK
-You can build the APK automatically with `--build`:
-
+### Step 3: Build Release APK
 ```bash
 cd ~/code/github/debloatandroidtv
 ./apply_to_cleanyourtv.sh ../cleanyourtv --build
 ```
-*(This automatically runs `./gradlew assembleRelease` and updates `bin/tvhome.apk`).*
+*(Automatically builds with `./gradlew assembleRelease` and updates `bin/tvhome.apk`).*
 
-*Or manually:*
+### Step 4: Deploy to Your TV
 ```bash
-cd ~/code/github/cleanyourtv/launcher
-./gradlew assembleRelease
-cp app/build/outputs/apk/release/app-release.apk ~/code/github/debloatandroidtv/bin/tvhome.apk
-```
-
-### Step 4: Deploy the Newly Built Launcher to Your TV
-Deploy using `setup.sh`:
-
-```bash
-cd ~/code/github/debloatandroidtv
 ./setup.sh tv/hisense/u7n.txt 10.0.10.25
 ```
-
----
-
-## Managing Debloat Lists (`./tv/<brand>/<model>.txt`)
-
-All debloat lists live under `./tv/` grouped by brand:
-
-```text
-tv/
-├── hisense/
-│   └── u7n.txt
-└── tcl/
-    ├── model.txt
-    └── c645.txt
-```
-
-### Adding a New Model (e.g., `tv/tcl/c645.txt` or `tv/sony/x90k.txt`)
-1. Create the brand folder if it doesn't already exist:
-   ```bash
-   mkdir -p tv/tcl
-   ```
-2. Create `<model>.txt` with package names to disable (one per line, `#` comments supported):
-   ```text
-   # Samba TV ACR Viewing Tracking
-   com.tcl.ttvs
-   com.tcl.logkit
-   ```
-3. Deploy to that specific TV by passing its path:
-   ```bash
-   ./setup.sh tv/tcl/c645.txt 10.0.10.26
-   ```
 
 ---
 
