@@ -446,6 +446,8 @@ do_apply() {
     adb -s "$TARGET" shell "pm grant com.gathin.tvhome android.permission.ACCESS_COARSE_LOCATION" >/dev/null 2>&1 || true
     # Activate SleepService for Standby & Sleep Timer (avoids manual accessibility toggle)
     adb -s "$TARGET" shell 'svc="com.gathin.tvhome/com.gathin.tvhome.SleepService"; cur=$(settings get secure enabled_accessibility_services); case "$cur" in *SleepService*) ;; null|"") settings put secure enabled_accessibility_services "$svc" ;; *) settings put secure enabled_accessibility_services "$cur:$svc" ;; esac; settings put secure accessibility_enabled 1' >/dev/null 2>&1 || true
+    # Force on-screen keyboard to always display (permanently prevents "Use keyboard on mobile device" suppression)
+    adb -s "$TARGET" shell "settings put secure show_ime_with_hard_keyboard 1" >/dev/null 2>&1 || true
     echo "Launcher installed successfully."
 
     # -----------------------------------------------------------------------------
