@@ -108,7 +108,7 @@ Run `setup.sh` from your computer, passing the path to the target debloat list a
 ./setup.sh tv/tcl/model.txt 10.0.10.26
 ```
 
-*(Arguments can be supplied in any order. The script automatically takes a pre-flight snapshot in `backup/`, applies the debloat & background lockdowns, configures AdGuard DNS, installs the launcher, and runs health verification).*
+*(Arguments can be supplied in any order. The script automatically takes a pre-flight snapshot in `backup/`, applies the debloat & background lockdowns, configures AdGuard DNS, installs the custom launcher, grants coarse/fine location for weather, automatically activates `SleepService` for instant standby and the sleep timer, and runs health verification).*
 
 ### Step 3: Secure Your TV
 Once the script finishes:
@@ -175,28 +175,46 @@ lockdown:com.vt.tv.ai_sense
 
 ## Workflow 4: Clone Upstream, Merge Customizations, Build & Deploy
 
-If you want to pull updates from upstream [CleanYourTV](https://github.com/Gathin23/cleanyourtv), recompile the launcher, or make further modifications:
+If you want to pull updates from upstream [CleanYourTV](https://github.com/Gathin23/cleanyourtv), recompile the launcher, or make further modifications, you have two flexible methods:
 
-### Step 1: Clone Upstream
-```bash
-cd ~/code/github
-git clone https://github.com/Gathin23/cleanyourtv.git
-```
+### Option A: Automated Build Script (Recommended)
 
-### Step 2: Merge Your Customizations
-```bash
-cd ~/code/github/debloatandroidtv
-./apply_to_cleanyourtv.sh ../cleanyourtv
-```
+Run one command from the `debloatandroidtv` root:
 
-### Step 3: Build Release APK
 ```bash
 cd ~/code/github/debloatandroidtv
 ./apply_to_cleanyourtv.sh ../cleanyourtv --build
 ```
-*(Automatically builds with `./gradlew assembleRelease` and updates `bin/tvhome.apk`).*
 
-### Step 4: Deploy to Your TV
+* **What it does automatically:**
+  1. Checks if `../cleanyourtv` exists. If not, it clones `https://github.com/Gathin23/cleanyourtv.git` for you.
+  2. Merges all custom assets, Java classes (`MainActivity.java`, `AppAdapter.java`, `Sleep.java`, `SleepService.java`, `Weather.java`), layout files, strings, and manifests into the clone.
+  3. Uses `./gradlew assembleRelease` to compile the optimized APK.
+  4. Automatically copies the compiled release APK into `bin/tvhome.apk`.
+
+### Option B: Native Git Patch Workflow
+
+If you prefer standard Git patching:
+
+```bash
+# 1. Clone upstream CleanYourTV
+cd ~/code/github
+git clone https://github.com/Gathin23/cleanyourtv.git
+cd cleanyourtv
+
+# 2. Apply the binary git patch from this repo
+git apply ~/code/github/debloatandroidtv/customizations/launcher.patch
+
+# 3. Build release APK
+cd launcher
+./gradlew assembleRelease
+
+# 4. Copy binary back to debloat kit
+cp app/build/outputs/apk/release/app-release.apk ~/code/github/debloatandroidtv/bin/tvhome.apk
+```
+
+### Deploy to Your TV
+Once built, simply run:
 ```bash
 ./setup.sh tv/hisense/u7n.txt 10.0.10.25
 ```
