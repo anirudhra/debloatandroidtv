@@ -1261,7 +1261,7 @@ index 0000000..65231c4
 +        android:pathData="M23.64,7c-0.45,-0.34 -4.93,-4 -11.64,-4c-1.5,0 -2.8,0.19 -3.95,0.47L10.74,6.16C11.32,6.05 11.95,6 12,6c5.25,0 9.01,2.8 9.4,3.11L23.64,7zM3.41,1.86L2,3.27l2.08,2.08C2.56,6.23 1.46,7.21 1.36,7.29L12,20.54l3.52,-4.37 5.07,5.07 1.41,-1.41L3.41,1.86zM12,17.27l-5.35,-6.65c0.97,-0.74 2.87,-1.82 5.35,-1.82 0.35,0 0.69,0.03 1.02,0.07l-2.02,2.02c-0.33,0.39 -0.5,0.88 -0.5,1.38 0,0.5 0.17,0.99 0.5,1.38L12,17.27z" />
 +</vector>
 diff --git a/launcher/app/src/main/res/layout/activity_main.xml b/launcher/app/src/main/res/layout/activity_main.xml
-index b8895f0..14413f5 100644
+index b8895f0..3c45fee 100644
 --- a/launcher/app/src/main/res/layout/activity_main.xml
 +++ b/launcher/app/src/main/res/layout/activity_main.xml
 @@ -187,7 +187,8 @@
@@ -1274,16 +1274,18 @@ index b8895f0..14413f5 100644
  
                  <LinearLayout
                      android:layout_width="match_parent"
-@@ -224,7 +225,7 @@
+@@ -223,8 +224,9 @@
+                         android:textAllCaps="true" />
  
                      <View
++                        android:id="@+id/clockDivider"
                          android:layout_width="1dp"
 -                        android:layout_height="26dp"
-+                        android:layout_height="34dp"
++                        android:layout_height="61dp"
                          android:layout_gravity="bottom"
                          android:layout_marginStart="16dp"
                          android:layout_marginEnd="16dp"
-@@ -236,9 +237,25 @@
+@@ -236,9 +238,25 @@
                          android:layout_weight="1"
                          android:layout_height="wrap_content"
                          android:layout_gravity="bottom"
@@ -1310,7 +1312,7 @@ index b8895f0..14413f5 100644
                          <!-- Shamsi date ("27 Mehr 1405"), shown when shamsi_date is on. -->
                          <TextView
                              android:id="@+id/shamsiDate"
-@@ -259,16 +276,16 @@
+@@ -259,16 +277,16 @@
                              android:gravity="left"
                              android:layout_width="match_parent"
                              android:layout_height="wrap_content"
@@ -1330,7 +1332,7 @@ index b8895f0..14413f5 100644
                              android:textAllCaps="true" />
                      </LinearLayout>
                  </LinearLayout>
-@@ -315,11 +332,8 @@
+@@ -315,11 +333,8 @@
  
                  <TextView
                      android:id="@+id/btnWifi"
@@ -1344,7 +1346,7 @@ index b8895f0..14413f5 100644
                      android:drawableStart="@drawable/ic_wifi"
                      android:nextFocusDown="@+id/grid" />
  
-@@ -332,12 +346,54 @@
+@@ -332,12 +347,54 @@
  
                  <TextView
                      android:id="@+id/btnSettings"
@@ -1414,7 +1416,7 @@ index e83b7f9..6293ad9 100644
 +    <bool name="date_single_line">false</bool>
  </resources>
 diff --git a/launcher/app/src/main/res/values/config.xml b/launcher/app/src/main/res/values/config.xml
-index 3deebbe..de9d213 100644
+index 3deebbe..88d748b 100644
 --- a/launcher/app/src/main/res/values/config.xml
 +++ b/launcher/app/src/main/res/values/config.xml
 @@ -9,24 +9,29 @@
@@ -1451,11 +1453,12 @@ index 3deebbe..de9d213 100644
  
      <!-- Some TVs give their Live TV app no leanback entry point at all, so `live_tv_package` above
           resolves to nothing (TCL Android TV 9 on China-market sets is one). This action is then sent
-@@ -41,10 +46,12 @@
+@@ -41,10 +46,13 @@
  
      <!-- A tile's name instead of the app's own: "package=Name". It also shows above the dock. -->
      <string-array name="app_labels">
-+        <item>io.gh.reisxd.tizentube.cobalt=Tube</item>
++        <item>io.gh.reisxd.tizentube.cobalt=YouTube</item>
++        <item>com.brkchen.music=Apple Music</item>
      </string-array>
      <!-- A tile's artwork instead of the app's banner: "package=drawable", a banner_* drawable bundled with the
           launcher (res/drawable). banner_tv is a magenta field with the Live TV glyph. -->
@@ -1464,7 +1467,7 @@ index 3deebbe..de9d213 100644
      </string-array>
  
      <!-- TVs with no TvInputManager have no HDMI list to read, but their own source-selection panel
-@@ -71,11 +78,14 @@
+@@ -71,11 +79,14 @@
           settings panel) on scancode 240 (KEY_UNKNOWN), the scancode several TCL buttons share. Find the keycode
           with `tools/tv.py 'logcat -v time -s InputReader:D'` while pressing the button. Leave empty to omit. -->
      <integer-array name="settings_key_keycodes">
@@ -1480,7 +1483,7 @@ index 3deebbe..de9d213 100644
  
      <!-- More remote buttons that open the input switcher, by Android keycode (INPUT_KEY_SERVICE=1
           build-and-install.sh; KEYCODE_TV always does). For buttons only a disabled app answered: the Xiaomi
-@@ -120,8 +130,8 @@
+@@ -120,8 +131,8 @@
      <bool name="dock_title">true</bool>
  
      <!-- Tiles per row in the grid; the dock always has this many slots. Tiles are 180dp wide at 4 columns and

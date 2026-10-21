@@ -396,7 +396,7 @@ install_tizentube_if_needed() {
     local target="$1"
     local pkg="io.gh.reisxd.tizentube.cobalt"
 
-    echo -n "Checking if Tube (TizenTube) is installed on TV... "
+    echo -n "Checking if TizenTube (YouTube) is installed on TV... "
     if adb -s "$target" shell "pm path $pkg" 2>/dev/null | grep -q "package:"; then
         echo "YES (Already installed)"
         return 0
@@ -432,11 +432,11 @@ install_tizentube_if_needed() {
         fi
     fi
 
-    echo "Deploying Tube (TizenTube) to TV..."
+    echo "Deploying TizenTube (YouTube) to TV..."
     adb -s "$target" push "$local_apk" /data/local/tmp/tizentube.apk >/dev/null 2>&1
     adb -s "$target" shell "pm install -r /data/local/tmp/tizentube.apk; rm -f /data/local/tmp/tizentube.apk" >/dev/null 2>&1
     adb -s "$target" shell "pm grant $pkg android.permission.RECORD_AUDIO" >/dev/null 2>&1 || true
-    echo "Tube (TizenTube) successfully installed and configured on TV!"
+    echo "TizenTube (YouTube) successfully installed and configured on TV!"
 }
 
 # =============================================================================
@@ -661,7 +661,7 @@ do_verify() {
         echo "PASS"
         echo "       Total bloatware packages disabled: $DIS_COUNT"
         if adb -s "$TARGET" shell "pm list packages -d" 2>/dev/null | grep -q "com.google.android.youtube.tv"; then
-            echo "       Stock YouTube: Disabled (replaced by Tube)"
+            echo "       Stock YouTube: Disabled (replaced by YouTube)"
         fi
         PASSED=$((PASSED + 1))
     else

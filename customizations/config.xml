@@ -46,7 +46,8 @@
 
     <!-- A tile's name instead of the app's own: "package=Name". It also shows above the dock. -->
     <string-array name="app_labels">
-        <item>io.gh.reisxd.tizentube.cobalt=Tube</item>
+        <item>io.gh.reisxd.tizentube.cobalt=YouTube</item>
+        <item>com.brkchen.music=Apple Music</item>
     </string-array>
     <!-- A tile's artwork instead of the app's banner: "package=drawable", a banner_* drawable bundled with the
          launcher (res/drawable). banner_tv is a magenta field with the Live TV glyph. -->

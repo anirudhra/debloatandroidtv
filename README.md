@@ -31,10 +31,10 @@ debloatandroidtv/
 │   ├── activity_main.xml   # Weather layout, HDMI alert banner & status bar
 │   ├── sleep_service.xml   # Accessibility service configuration
 │   ├── AndroidManifest.xml # Permissions (Internet, Kill processes) & service declarations
-│   ├── config.xml          # Tube rename, YouTube banner, 5 dock apps, 5 columns, weather config
+│   ├── config.xml          # YouTube/Apple Music labels, YouTube banner, 5 dock apps, 5 columns
 │   ├── strings.xml         # 2-row date format, Control Center & move mode strings
 │   ├── bools.xml           # Multi-line date enabled
-│   ├── banner_youtube.png  # High-res YouTube leanback banner for Tube
+│   ├── banner_youtube.png  # High-res YouTube leanback banner for TizenTube
 │   └── ic_wifi_off.xml     # Offline status icon for Wi-Fi pill
 └── tv/                     # Modular multi-device debloat & button configurations
     ├── common/
@@ -57,7 +57,7 @@ debloatandroidtv/
 To make debloating scalable across multiple TV brands (Hisense, TCL, Onn, Chromecast, Sony) without duplicating common packages:
 
 1. **Universal Base Layer (`tv/common/common.debloat.txt`):**  
-   Contains bloatware present on almost all modern Android TV / Google TV devices (Google telemetry/tracking, GTV auto-installers, Play Games/Videos, TalkBack/Switch Access conflicts, and stock YouTube/YouTube Music replaced by Tube). This file is automatically applied on every run.
+   Contains bloatware present on almost all modern Android TV / Google TV devices (Google telemetry/tracking, GTV auto-installers, Play Games/Videos, TalkBack/Switch Access conflicts, and stock YouTube/YouTube Music replaced by ad-free TizenTube). This file is automatically applied on every run.
 2. **Device-Specific Layer (`tv/<brand>/<model>.debloat.txt`):**  
    Contains only manufacturer-specific bloatware, ACR tracking, and retail demo modes (e.g. Hisense `com.vt.*`, TCL `com.tcl.*`, Onn streaming apps).
 3. **Remote Button Profiles (`tv/<brand>/<model>.buttons.txt`):**  
@@ -82,9 +82,9 @@ To make debloating scalable across multiple TV brands (Hisense, TCL, Onn, Chrome
 * **HDMI Hotplug Auto-Detection:** Instant banner notification when an HDMI device is connected or powered on (*"HDMI 2 connected · Press OK to switch"*). Press OK to switch immediately, or Back to dismiss (auto-dismisses after 8s).
 * **OLED / Mini-LED Pixel Drift:** Microscopic 1.5dp subpixel drift every minute across static clock and status elements to prevent static image retention and burn-in on premium OLED and Mini-LED panels.
 * **Full-Grid Dynamic Ambient Glow:** Samples dominant colors from every app's artwork and casts a smooth ambient glow as you scroll through the entire grid, not just the dock row.
-* **Custom App Branding:** TizenTube is prominently titled **Tube** and uses the official YouTube Leanback icon (persists across TizenTube updates).
+* **Custom App Branding:** TizenTube is prominently titled **YouTube** and uses the official YouTube Leanback banner; Radon Tunes is titled **Apple Music**.
 * **5 Icons Per Row by Default:** The app grid and dock default to 5 columns for a balanced, spacious leanback layout.
-* **Pinned Dock:** Dedicated bottom dock containing 5 slots: Tube, Apple TV, Amazon Prime Video, Jellyfin, and LocalNow.
+* **Pinned Dock:** Dedicated bottom dock containing 5 slots: YouTube, Apple TV, Amazon Prime Video, Jellyfin, and LocalNow.
 * **Refined Status Bar:**
   * Clean thin clock (Outfit font) with greeting text removed.
   * Date formatted cleanly into 2 rows (Row 1: Date, Month & Year; Row 2: Day of week).

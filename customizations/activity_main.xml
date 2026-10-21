@@ -224,8 +224,9 @@
                         android:textAllCaps="true" />
 
                     <View
+                        android:id="@+id/clockDivider"
                         android:layout_width="1dp"
-                        android:layout_height="34dp"
+                        android:layout_height="61dp"
                         android:layout_gravity="bottom"
                         android:layout_marginStart="16dp"
                         android:layout_marginEnd="16dp"
