@@ -16,6 +16,56 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TV_DIR="$SCRIPT_DIR/tv"
 BACKUP_DIR="$SCRIPT_DIR/backup"
 
+show_help() {
+    cat << 'EOF'
+Android TV Debloat & Custom Launcher Setup Kit
+
+Usage:
+  ./setup.sh [COMMAND] [ARGUMENTS...]
+
+Commands:
+  apply [list_path] [tv_ip]     (Default) Apply debloat list, configure AdGuard DNS,
+                                and install customized Apple TV 4K-style launcher.
+  discover [tv_ip] [out_file]   Connect to a TV, audit all packages, and generate
+                                a candidate debloat list under tv/<brand>/<model>.txt.
+  verify [tv_ip]                Verify Home launcher status, AdGuard DNS ad-blocking,
+                                disabled bloatware counts, and system RAM health.
+
+Help:
+  -h, --help, help              Show this help reference.
+
+Examples:
+  # Deploy Hisense U7N setup:
+  ./setup.sh tv/hisense/u7n.txt 10.0.10.25
+
+  # Deploy TCL TV setup:
+  ./setup.sh tv/tcl/model.txt 10.0.10.26
+
+  # Discover & generate debloat list for a new TV:
+  ./setup.sh discover 10.0.10.26 tv/tcl/c645.txt
+  ./setup.sh discover 10.0.10.26
+
+  # Run post-setup health check:
+  ./setup.sh verify 10.0.10.25
+
+  # Interactive mode (prompts with numbered menu from ./tv/):
+  ./setup.sh
+
+Environment Variables:
+  TV_HOST                       Default target TV IP (default: 10.0.10.25)
+  TV_PORT                       ADB network port (default: 5555)
+  DEBLOAT_LIST                  Path to debloat package list
+EOF
+}
+
+# Check for help flag anywhere in arguments
+for arg in "$@"; do
+    if [ "$arg" == "--help" ] || [ "$arg" == "-h" ] || [ "$arg" == "help" ]; then
+        show_help
+        exit 0
+    fi
+done
+
 COMMAND="apply"
 if [ "${1:-}" == "discover" ]; then
     COMMAND="discover"

@@ -49,6 +49,24 @@ debloatandroidtv/
 
 ---
 
+## Command Reference (`./setup.sh --help`)
+
+You can view the full command reference and examples directly from your terminal anytime:
+
+```bash
+./setup.sh --help
+```
+
+| Command / Syntax | Purpose |
+|---|---|
+| `./setup.sh <list_path> [tv_ip]` | **Apply Setup:** Debloats TV, configures AdGuard DNS, installs custom launcher, and runs verification. |
+| `./setup.sh discover [tv_ip] [output_file]` | **Audit TV:** Scans installed packages on a TV and generates a categorized debloat candidate list. |
+| `./setup.sh verify [tv_ip]` | **Health Check:** Verifies Home launcher, DNS ad-blocking, AppOps starvation, and system RAM. |
+| `./setup.sh` | **Interactive Menu:** Scans `./tv/` for debloat lists and presents an interactive menu. |
+| `./setup.sh --help` / `-h` | Displays the built-in command reference and examples. |
+
+---
+
 ## Workflow 1: Quick Deploy to TV (Using Pre-built APK)
 
 *No Java or Android SDK required!*
