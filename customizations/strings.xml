@@ -107,4 +107,29 @@
     <!-- Cinematic top shelf (cinematic_home): the line under the focused dock app's name; %1$s is when it was
          last opened, e.g. "5 minutes ago" or "yesterday, 9:40 pm". -->
     <string name="last_opened">Last opened %1$s</string>
+
+    <!-- Control Center & Sleep -->
+    <string name="control_center">Control Center</string>
+    <string name="sleep_timer">Sleep timer</string>
+    <string name="sleep_now">Turn off now</string>
+    <string name="free_memory">Free up memory</string>
+    <string name="memory_free">%1$d MB free</string>
+    <string name="memory_freed">Freed %1$d MB (%2$d MB free)</string>
+    <string name="sound_output">Sound output</string>
+    <string name="soundbar">Soundbar (HDMI ARC)</string>
+    <string name="tv_speakers">TV speakers</string>
+    <string name="screensaver">Screensaver</string>
+    <string name="minutes_left">%1$d min left</string>
+    <string name="sleep_needs_setup">Standby requires SleepService enabled in accessibility</string>
+    <string name="sleep_service_desc">Enables Control Center and sleep timer to put the TV in standby</string>
+
+    <!-- App Move Mode -->
+    <string name="move_app">Move app</string>
+    <string name="move_hint">Use arrows to move, press OK to drop</string>
+    <string name="reset_order">Reset app order</string>
+    <string name="app_info">App info</string>
+
+    <!-- HDMI Hotplug Alert -->
+    <string name="input_connected">%1$s connected</string>
+    <string name="switch_input">Press OK to switch</string>
 </resources>

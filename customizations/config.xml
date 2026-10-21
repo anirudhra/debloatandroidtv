@@ -19,6 +19,9 @@
          set "fill_dock": false. -->
     <bool name="fill_dock">true</bool>
 
+    <!-- Show live weather above the date (Open-Meteo, 30 min refresh, no API key). -->
+    <bool name="show_weather">true</bool>
+
     <!-- Apps never shown as tiles (e.g. the Live TV app, which the Inputs menu already covers). -->
     <string-array name="hidden_apps">
         <item>com.vt.tv.tvcenter</item>

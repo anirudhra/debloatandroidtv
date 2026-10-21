@@ -21,10 +21,16 @@ debloatandroidtv/
 │   └── tvhome.apk          # Pre-compiled customized launcher APK (ready to deploy)
 ├── customizations/         # Unified launcher customizations & assets
 │   ├── launcher.patch      # Full binary git patch against upstream CleanYourTV
-│   ├── MainActivity.java   # Full-grid ambient glow & icon-only Wi-Fi logic
-│   ├── activity_main.xml   # Clean status bar & icon-only pill layouts
-│   ├── config.xml          # Tube rename, YouTube banner, and 4 dock apps
-│   ├── strings.xml         # 2-row date format (Day of week / Date & Month)
+│   ├── MainActivity.java   # Ambient glow, Control Center, Hotplug & Pixel Drift logic
+│   ├── AppAdapter.java     # Move mode (hold OK to reorder, App Info, Reset order)
+│   ├── Sleep.java          # Sleep timer cycle (30/60/90m) & standby executor
+│   ├── SleepService.java   # Standby accessibility service (GLOBAL_ACTION_LOCK_SCREEN)
+│   ├── Weather.java        # Open-Meteo live weather client with WMO emoji mapper
+│   ├── activity_main.xml   # Weather layout, HDMI alert banner & status bar
+│   ├── sleep_service.xml   # Accessibility service configuration
+│   ├── AndroidManifest.xml # Permissions (Internet, Kill processes) & service declarations
+│   ├── config.xml          # Tube rename, YouTube banner, 4 dock apps, weather config
+│   ├── strings.xml         # 2-row date format, Control Center & move mode strings
 │   ├── bools.xml           # Multi-line date enabled
 │   ├── banner_youtube.png  # High-res YouTube leanback banner for Tube
 │   └── ic_wifi_off.xml     # Offline status icon for Wi-Fi pill
@@ -39,6 +45,20 @@ debloatandroidtv/
 
 ## Custom Launcher Features (`bin/tvhome.apk`)
 
+* **App Reordering / Move Mode:** Hold OK on any app tile to open options:
+  * **Move app:** Use D-pad to move the tile anywhere across dock and grid, press OK to drop. Custom order is saved locally and persists across reboots.
+  * **App info:** Direct access to Android system application settings.
+  * **Reset app order:** Reverts ordering back to the default configuration.
+* **Apple TV-Style Control Center:** Hold OK on the **Settings** pill to open a sleek glass overlay:
+  * **Sleep timer:** Cycle through 30 / 60 / 90 min with live remaining countdown.
+  * **Turn off now:** Puts the TV into instant standby via `SleepService` accessibility integration.
+  * **Free up memory:** One-click RAM cleaner that stops background cached apps and displays freed memory.
+  * **Sound output:** Live audio output status (Soundbar via HDMI ARC vs TV speakers) with quick jump to Sound settings.
+  * **Screensaver:** Immediately launches the active system screensaver (`Somnambulator`).
+  * **Launcher Settings & Dock Edit:** Quick access to launcher customization.
+* **Live Weather next to Clock:** Clean temperature and condition emoji (☀️, ⛅, 🌧️, ❄️) next to the date, powered by Open-Meteo (free, no API keys, private, cached locally every 30m).
+* **HDMI Hotplug Auto-Detection:** Instant banner notification when an HDMI device is connected or powered on (*"HDMI 2 connected · Press OK to switch"*). Press OK to switch immediately, or Back to dismiss (auto-dismisses after 8s).
+* **OLED / Mini-LED Pixel Drift:** Microscopic 1.5dp subpixel drift every minute across static clock and status elements to prevent static image retention and burn-in on premium OLED and Mini-LED panels.
 * **Full-Grid Dynamic Ambient Glow:** Samples dominant colors from every app's artwork and casts a smooth ambient glow as you scroll through the entire grid, not just the dock row.
 * **Custom App Branding:** TizenTube is prominently titled **Tube** and uses the official YouTube Leanback icon (persists across TizenTube updates).
 * **Pinned Dock:** Dedicated bottom dock containing Tube, Apple TV, Amazon Prime Video, and LocalNow.

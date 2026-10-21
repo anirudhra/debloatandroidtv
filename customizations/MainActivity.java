@@ -3,6 +3,7 @@ package com.gathin.tvhome;
 import android.animation.ArgbEvaluator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
@@ -23,6 +24,8 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
 import android.media.tv.TvContract;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
@@ -208,6 +211,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean libraryFocusPending;
     private RecyclerView.OnScrollListener pendingFocusScroll;
 
+    private boolean resumed;
+    private TextView weatherView;
+    private boolean showWeather;
+    private View alertInputBanner;
+    private TextView alertInputText;
+    private String alertInputId;
+    private View leftBlock;
+    private View topButtons;
+    private int driftStep;
+    private static final float[][] DRIFT_DP = {
+        {0f, 0f}, {1.5f, 0f}, {1.5f, 1.5f}, {0f, 1.5f},
+        {-1.5f, 0f}, {-1.5f, -1.5f}, {0f, -1.5f}
+    };
+
     private final Handler handler = new Handler(Looper.getMainLooper());
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
@@ -231,6 +248,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         @Override
         public void onInputRemoved(String inputId) {
             updateInputsButton();
+            if (inputId.equals(alertInputId)) hideAlert();
+        }
+
+        @Override
+        public void onInputStateChanged(String inputId, int state) {
+            updateInputsButton();
+            if (state == TvInputManager.INPUT_STATE_CONNECTED && resumed) {
+                showAlert(inputId);
+            }
         }
     };
     /** Listens for any VPN coming up or going down, even one this app's traffic is excluded from. */
@@ -264,6 +290,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             updateWifiLabel();
             sky.update();
             wallpaperPlayer.update();
+            updateWeather();
+            applyPixelDrift();
             handler.postDelayed(this, MINUTE_MS);
         }
     };
@@ -483,9 +511,25 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnReorder.setOnClickListener(v -> toggleReorder());
         btnReorder.setVisibility(cfg.reorderButton ? View.VISIBLE : View.GONE);
         btnSettings.setOnLongClickListener(v -> {
-            showSettingsMenu();
+            showControlCenter(btnSettings);
             return true;
         });
+
+        weatherView = findViewById(R.id.weather);
+        showWeather = getResources().getBoolean(R.bool.show_weather);
+        alertInputBanner = findViewById(R.id.alertInputBanner);
+        alertInputText = findViewById(R.id.alertInputText);
+        leftBlock = findViewById(R.id.leftBlock);
+        topButtons = findViewById(R.id.topButtons);
+        if (alertInputBanner != null) {
+            alertInputBanner.setOnClickListener(v -> {
+                if (alertInputId != null) {
+                    String id = alertInputId;
+                    hideAlert();
+                    openInput(id);
+                }
+            });
+        }
 
         // Keep focus on the top bar at its ends and at the top: Android's focus finder would otherwise
         // jump to a tile far below when there is nothing in that direction.
@@ -578,6 +622,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onResume() {
         super.onResume();
+        resumed = true;
         // A festival that started or ended while Home was in the background: rebuild with or without it.
         if (festive != festival.active(LocalDate.now())) {
             recreate();
@@ -593,6 +638,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         updateRace();
         updateWifiLabel();
         updateInputsButton();
+        updateWeather();
         if (showStats) startStats();
         sky.update();
         wallpaperPlayer.start();
@@ -692,6 +738,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onPause() {
         super.onPause();
+        resumed = false;
+        hideAlert();
         endReorder();   // Home or another app while reordering keeps the order so far
         wallpaperPlayer.stop();
         stopAmbientAnimation();
@@ -727,6 +775,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        hideAlert();
         wallpaperPlayer.close();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
@@ -770,6 +819,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (handleSettingsKey(event)) return true;
+        if (alertInputBanner != null && alertInputBanner.getVisibility() == View.VISIBLE) {
+            boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
+            int code = event.getKeyCode();
+            boolean ok = code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER
+                    || code == KeyEvent.KEYCODE_NUMPAD_ENTER;
+            boolean back = code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE;
+            if (ok) {
+                if (down && alertInputId != null) {
+                    String id = alertInputId;
+                    hideAlert();
+                    openInput(id);
+                }
+                return true;
+            } else if (back) {
+                if (down) hideAlert();
+                return true;
+            }
+        }
         if (!reordering) return super.dispatchKeyEvent(event);
         if (dockEditing) return dispatchDockEdit(event);
         boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
@@ -1019,7 +1086,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     @Override
     public void onBackPressed() {
-        // Home screen: Back goes nowhere.
+        if (alertInputBanner != null && alertInputBanner.getVisibility() == View.VISIBLE) {
+            hideAlert();
+            return;
+        }
+        if (reordering) {
+            if (movingKey != null) {
+                drop();
+            } else {
+                endReorder();
+            }
+            return;
+        }
     }
 
     // ---- glass highlight -------------------------------------------------------------------------
@@ -1655,6 +1733,46 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         return true;
     }
 
+    @Override
+    public void onTileLongPress(int position, View card) {
+        View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        LinearLayout rows = panel.findViewById(R.id.rows);
+        PopupWindow popup = glassPopup(panel, (int) (220 * density));
+        if (adapter.canMove(position)) {
+            addSettingsMenuRow(rows, popup, R.string.move_app, () -> {
+                if (!reordering) beginReorder();
+                pickUp(position);
+                Toast.makeText(this, R.string.move_hint, Toast.LENGTH_LONG).show();
+                refocusAfterLayout(position);
+            });
+        }
+        addSettingsMenuRow(rows, popup, R.string.app_info, () -> adapter.openAppInfo(position));
+        addSettingsMenuRow(rows, popup, R.string.reset_order, () -> {
+            File orderFile = Order.file(this);
+            if (orderFile.exists()) orderFile.delete();
+            adapter.setSavedOrder(Collections.emptyMap());
+            lastFocused = 0;
+            lastFocusedKey = null;
+            reloadTiles();
+        });
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        popup.setWidth(Math.max((int) (220 * density), panel.getMeasuredWidth()));
+        int panelH = panel.getMeasuredHeight();
+        popup.setHeight(panelH);
+        int[] at = new int[2];
+        card.getLocationInWindow(at);
+        int gap = (int) (10 * density);
+        boolean fitsBelow = at[1] + card.getHeight() + gap + panelH <= root.getHeight();
+        if (fitsBelow) {
+            dropIn(popup, panel, card, Gravity.START);
+        } else {
+            panel.setAlpha(0f);
+            popup.showAsDropDown(card, 0, -(card.getHeight() + gap + panelH), Gravity.START);
+            panel.animate().alpha(1f).setDuration(180).start();
+        }
+        rows.getChildAt(0).requestFocus();
+    }
+
     @Override public void onLibraryFocused() {
         libraryFocusPending = false;
         hideGlass();
@@ -2238,23 +2356,225 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     // ---- launcher settings and module cards -------------------------------------------------------
 
-    /** Keep a normal Settings click for the TV; the launcher's choices live behind hold OK. */
-    private void showSettingsMenu() {
-        View anchor = findViewById(R.id.btnSettings);
+    /** Control Center (hold Settings): sleep timer, turn off, memory, sound, screensaver, launcher settings. */
+    private void showControlCenter(View anchor) {
         View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
         LinearLayout rows = panel.findViewById(R.id.rows);
-        PopupWindow popup = glassPopup(panel, (int) (200 * density));
+        PopupWindow popup = glassPopup(panel, (int) (260 * density));
+
+        // Heading
+        TextView heading = new TextView(this);
+        heading.setText(getString(R.string.control_center).toUpperCase(Locale.ROOT));
+        heading.setTextColor(0x8CFFFFFF);
+        heading.setTextSize(11f);
+        heading.setLetterSpacing(0.18f);
+        heading.setTypeface(getResources().getFont(R.font.outfit));
+        heading.setSingleLine(true);
+        heading.setPadding((int) (12 * density), (int) (8 * density), (int) (12 * density), (int) (6 * density));
+        rows.addView(heading);
+
+        // Sleep Timer
+        final TextView[] timerStatus = new TextView[1];
+        timerStatus[0] = addControlCenterRow(rows, popup, getString(R.string.sleep_timer), sleepStatus(), null, () -> {
+            Sleep.cycle(this);
+            if (timerStatus[0] != null) timerStatus[0].setText(sleepStatus());
+        });
+
+        // Standby
+        addControlCenterRow(rows, popup, getString(R.string.sleep_now), null, () -> Sleep.now(this), null);
+
+        // Free Memory
+        addControlCenterRow(rows, popup, getString(R.string.free_memory),
+                getString(R.string.memory_free, availableMb()), this::freeMemory, null);
+
+        // Sound Output
+        addControlCenterRow(rows, popup, getString(R.string.sound_output),
+                getString(soundbarConnected() ? R.string.soundbar : R.string.tv_speakers),
+                () -> open(new Intent(Settings.ACTION_SOUND_SETTINGS)), null);
+
+        // Screensaver
+        addControlCenterRow(rows, popup, getString(R.string.screensaver), null, () -> {
+            Intent ss = new Intent(Intent.ACTION_MAIN).setClassName("com.android.systemui", "com.android.systemui.Somnambulator");
+            ss.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                startActivity(ss);
+            } catch (ActivityNotFoundException ignored) {
+            }
+        }, null);
+
+        addSeparator(rows);
+
+        // Launcher Settings
         addSettingsMenuRow(rows, popup, R.string.launcher_settings, () -> startActivityForResult(
                 new Intent(this, LauncherSettingsActivity.class), LAUNCHER_SETTINGS_REQUEST));
         if (moduleCards) addSettingsMenuRow(rows, popup, R.string.module_cards, this::showModuleCards);
         if (dockRow) addSettingsMenuRow(rows, popup, R.string.dock_edit, this::startDockEdit);
         addSettingsMenuRow(rows, popup, R.string.reorder, this::toggleReorder);
+
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
-        popup.setWidth(Math.max((int) (200 * density), panel.getMeasuredWidth()));
-        // Hebrew puts Settings at the left of the header: grow the menu inward from it.
+        popup.setWidth(Math.max((int) (260 * density), panel.getMeasuredWidth()));
         dropIn(popup, panel, anchor, getResources().getBoolean(R.bool.rtl_menu_bar)
                 ? Gravity.START : Gravity.END);
-        rows.getChildAt(0).requestFocus();
+        if (rows.getChildCount() > 1) {
+            rows.getChildAt(1).requestFocus();
+        }
+    }
+
+    private TextView addControlCenterRow(LinearLayout rows, PopupWindow popup, String title, String status,
+                                         Runnable action, Runnable stay) {
+        View row = getLayoutInflater().inflate(R.layout.item_input, rows, false);
+        row.findViewById(R.id.icon).setVisibility(View.GONE);
+        row.findViewById(R.id.dot).setVisibility(View.GONE);
+        TextView titleView = row.findViewById(R.id.title);
+        titleView.setText(title);
+        TextView statusView = row.findViewById(R.id.status);
+        if (status != null) {
+            statusView.setText(status);
+            statusView.setVisibility(View.VISIBLE);
+        } else {
+            statusView.setVisibility(View.GONE);
+        }
+        row.setOnClickListener(v -> {
+            if (stay != null) {
+                stay.run();
+                return;
+            }
+            popup.dismiss();
+            if (action != null) action.run();
+        });
+        final boolean[] pressed = {false};
+        row.setOnKeyListener((v, code, event) -> {
+            if (code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER) return false;
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (event.getRepeatCount() == 0) pressed[0] = true;
+                return true;
+            }
+            boolean activate = pressed[0];
+            pressed[0] = false;
+            if (activate) {
+                if (stay != null) {
+                    stay.run();
+                } else {
+                    popup.dismiss();
+                    if (action != null) action.run();
+                }
+            }
+            return true;
+        });
+        rows.addView(row);
+        return statusView;
+    }
+
+    private String sleepStatus() {
+        int left = Sleep.minutesLeft(this);
+        return left > 0 ? getString(R.string.minutes_left, left) : getString(R.string.off);
+    }
+
+    private long availableMb() {
+        ActivityManager am = getSystemService(ActivityManager.class);
+        if (am == null) return 0;
+        ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+        am.getMemoryInfo(mi);
+        return mi.availMem / (1024 * 1024);
+    }
+
+    private boolean soundbarConnected() {
+        AudioManager am = getSystemService(AudioManager.class);
+        if (am == null) return false;
+        for (AudioDeviceInfo d : am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+            if (d.getType() == AudioDeviceInfo.TYPE_HDMI_ARC) return true;
+        }
+        return false;
+    }
+
+    private void freeMemory() {
+        ActivityManager am = getSystemService(ActivityManager.class);
+        if (am == null) return;
+        ActivityManager.MemoryInfo before = new ActivityManager.MemoryInfo();
+        am.getMemoryInfo(before);
+        for (ApplicationInfo ai : getPackageManager().getInstalledApplications(0)) {
+            if ((ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
+            if (ai.packageName.equals(getPackageName())) continue;
+            am.killBackgroundProcesses(ai.packageName);
+        }
+        handler.postDelayed(() -> {
+            ActivityManager.MemoryInfo after = new ActivityManager.MemoryInfo();
+            am.getMemoryInfo(after);
+            long freed = Math.max(0, after.availMem - before.availMem) / (1024 * 1024);
+            Toast.makeText(this, getString(R.string.memory_freed, freed, after.availMem / (1024 * 1024)),
+                    Toast.LENGTH_LONG).show();
+        }, 800);
+    }
+
+    private void updateWeather() {
+        if (!showWeather || weatherView == null) return;
+        Weather.refresh(this, text -> {
+            if (weatherView != null) {
+                weatherView.setText(text);
+                weatherView.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    private void applyPixelDrift() {
+        if (leftBlock == null && topButtons == null) return;
+        driftStep = (driftStep + 1) % DRIFT_DP.length;
+        float dx = DRIFT_DP[driftStep][0] * density;
+        float dy = DRIFT_DP[driftStep][1] * density;
+        if (leftBlock != null) {
+            leftBlock.animate().translationX(dx).translationY(dy).setDuration(2000).start();
+        }
+        if (topButtons != null) {
+            topButtons.animate().translationX(dx).translationY(dy).setDuration(2000).start();
+        }
+    }
+
+    private String inputLabel(String inputId) {
+        TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
+        if (tim == null) return inputId;
+        try {
+            TvInputInfo info = tim.getTvInputInfo(inputId);
+            if (info == null) return inputId;
+            CharSequence custom = info.loadCustomLabel(this);
+            if (custom != null && custom.length() > 0) return custom.toString();
+            CharSequence l = info.loadLabel(this);
+            String label = l == null ? info.getId() : l.toString();
+            if (info.getType() == TvInputInfo.TYPE_HDMI && !label.toUpperCase(Locale.ROOT).contains("HDMI")) {
+                label = "HDMI " + label;
+            }
+            return label;
+        } catch (Exception e) {
+            return inputId;
+        }
+    }
+
+    private final Runnable hideAlert = () -> {
+        if (alertInputBanner == null || alertInputBanner.getVisibility() != View.VISIBLE) return;
+        alertInputBanner.animate().cancel();
+        alertInputBanner.animate().alpha(0f).translationY(-20f * density).setDuration(250).withEndAction(() -> {
+            alertInputBanner.setVisibility(View.GONE);
+            alertInputId = null;
+        }).start();
+    };
+
+    private void showAlert(String inputId) {
+        if (alertInputBanner == null || alertInputText == null) return;
+        alertInputId = inputId;
+        String name = inputLabel(inputId);
+        alertInputText.setText(getString(R.string.input_connected, name));
+        alertInputBanner.animate().cancel();
+        alertInputBanner.setAlpha(0f);
+        alertInputBanner.setTranslationY(-20f * density);
+        alertInputBanner.setVisibility(View.VISIBLE);
+        alertInputBanner.animate().alpha(1f).translationY(0f).setDuration(300)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start();
+        handler.removeCallbacks(hideAlert);
+        handler.postDelayed(hideAlert, 8000);
+    }
+
+    private void hideAlert() {
+        handler.removeCallbacks(hideAlert);
+        hideAlert.run();
     }
 
     private void addSettingsMenuRow(LinearLayout rows, PopupWindow popup, int title, Runnable action) {

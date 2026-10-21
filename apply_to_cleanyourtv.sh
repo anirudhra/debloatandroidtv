@@ -37,16 +37,23 @@ echo "Applying customizations to '$TARGET_DIR'..."
 mkdir -p "$TARGET_DIR/launcher/app/src/main/res/drawable"
 mkdir -p "$TARGET_DIR/launcher/app/src/main/res/layout"
 mkdir -p "$TARGET_DIR/launcher/app/src/main/res/values"
+mkdir -p "$TARGET_DIR/launcher/app/src/main/res/xml"
 mkdir -p "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome"
 
 # Copy custom assets and source files
 cp "$CUSTOM_DIR/banner_youtube.png" "$TARGET_DIR/launcher/app/src/main/res/drawable/"
 cp "$CUSTOM_DIR/ic_wifi_off.xml" "$TARGET_DIR/launcher/app/src/main/res/drawable/"
 cp "$CUSTOM_DIR/MainActivity.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
+cp "$CUSTOM_DIR/AppAdapter.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
+cp "$CUSTOM_DIR/Sleep.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
+cp "$CUSTOM_DIR/SleepService.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
+cp "$CUSTOM_DIR/Weather.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/activity_main.xml" "$TARGET_DIR/launcher/app/src/main/res/layout/"
 cp "$CUSTOM_DIR/config.xml" "$TARGET_DIR/launcher/app/src/main/res/values/"
 cp "$CUSTOM_DIR/strings.xml" "$TARGET_DIR/launcher/app/src/main/res/values/"
 cp "$CUSTOM_DIR/bools.xml" "$TARGET_DIR/launcher/app/src/main/res/values/"
+cp "$CUSTOM_DIR/sleep_service.xml" "$TARGET_DIR/launcher/app/src/main/res/xml/"
+cp "$CUSTOM_DIR/AndroidManifest.xml" "$TARGET_DIR/launcher/app/src/main/"
 
 echo "Successfully merged customized files into $TARGET_DIR/launcher."
 

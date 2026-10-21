@@ -443,6 +443,9 @@ do_apply() {
     adb -s "$TARGET" push "$APK" /data/local/tmp/tvhome.apk >/dev/null 2>&1
     adb -s "$TARGET" shell "pm install -r /data/local/tmp/tvhome.apk; rm -f /data/local/tmp/tvhome.apk" >/dev/null 2>&1
     adb -s "$TARGET" shell "pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION" >/dev/null 2>&1 || true
+    adb -s "$TARGET" shell "pm grant com.gathin.tvhome android.permission.ACCESS_COARSE_LOCATION" >/dev/null 2>&1 || true
+    # Activate SleepService for Standby & Sleep Timer (avoids manual accessibility toggle)
+    adb -s "$TARGET" shell 'svc="com.gathin.tvhome/com.gathin.tvhome.SleepService"; cur=$(settings get secure enabled_accessibility_services); case "$cur" in *SleepService*) ;; null|"") settings put secure enabled_accessibility_services "$svc" ;; *) settings put secure enabled_accessibility_services "$cur:$svc" ;; esac; settings put secure accessibility_enabled 1' >/dev/null 2>&1 || true
     echo "Launcher installed successfully."
 
     # -----------------------------------------------------------------------------

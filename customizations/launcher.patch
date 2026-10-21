@@ -1,8 +1,268 @@
+diff --git a/launcher/app/src/main/AndroidManifest.xml b/launcher/app/src/main/AndroidManifest.xml
+index 1f96dd0..c58129a 100644
+--- a/launcher/app/src/main/AndroidManifest.xml
++++ b/launcher/app/src/main/AndroidManifest.xml
+@@ -9,6 +9,8 @@
+ 
+     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
++    <uses-permission android:name="android.permission.INTERNET" />
++    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+     <!-- Needed since Android 10 to read the Wi-Fi network name for the network pill. Never requested at
+          runtime: build-and-install grants it with pm grant, so lint's Android 12 "ask for COARSE with
+          FINE" rule does not apply here. -->
+@@ -112,6 +114,24 @@
+             </intent-filter>
+         </service>
+ 
++        <!-- Standby action for Control Center and sleep timer -->
++        <service
++            android:name=".SleepService"
++            android:label="@string/app_name"
++            android:exported="true"
++            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
++            <intent-filter>
++                <action android:name="android.accessibilityservice.AccessibilityService" />
++            </intent-filter>
++            <meta-data
++                android:name="android.accessibilityservice"
++                android:resource="@xml/sleep_service" />
++        </service>
++
++        <receiver
++            android:name=".Sleep$Alarm"
++            android:exported="false" />
++
+         <!-- tools/theme.sh writes the theme through this where the shell can't reach Android/data;
+              see ThemeProvider. WRITE_SECURE_SETTINGS: the adb shell has it, ordinary apps don't. -->
+         <provider
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/AppAdapter.java b/launcher/app/src/main/java/com/gathin/tvhome/AppAdapter.java
+index 5b9d071..78bfabd 100644
+--- a/launcher/app/src/main/java/com/gathin/tvhome/AppAdapter.java
++++ b/launcher/app/src/main/java/com/gathin/tvhome/AppAdapter.java
+@@ -53,6 +53,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+         /** Called for a D-pad direction key on a tile. Return true when handled (focus stays put). */
+         boolean onTileVerticalKey(int position, int keyCode);
+ 
++        /** Hold OK on a tile: popup menu to move app, show app info, or reset order. */
++        void onTileLongPress(int position, View card);
++
+         void onLibraryRequested();
+         void onLibraryFocused();
+         void onLibraryUp();
+@@ -420,11 +423,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+         }
+         h.card.setOnClickListener(v -> launch(e));
+         h.card.setOnLongClickListener(v -> {
+-            Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + e.pkg));
+-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+-            try {
+-                ctx.startActivity(i);
+-            } catch (ActivityNotFoundException ignored) {
++            int pos = h.getBindingAdapterPosition();
++            if (pos != RecyclerView.NO_POSITION && e.kind != Entry.EMPTY) {
++                listener.onTileLongPress(pos, v);
+             }
+             return true;
+         });
+@@ -501,6 +502,23 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+         return n > 0 && items.get(n - 1).kind == Entry.HOME_SETTINGS ? n - 1 : n;
+     }
+ 
++    boolean canMove(int position) {
++        return position >= 0 && position < movableCount() && items.get(position).kind != Entry.EMPTY
++                && items.get(position).kind != Entry.HOME_SETTINGS;
++    }
++
++    void openAppInfo(int position) {
++        if (position < 0 || position >= items.size()) return;
++        String pkg = items.get(position).pkg;
++        if (pkg == null) return;
++        Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg));
++        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++        try {
++            ctx.startActivity(i);
++        } catch (ActivityNotFoundException ignored) {
++        }
++    }
++
+     /** Keys of the movable tiles in their current order, for Order (empty dock slots are not tiles). */
+     List<String> movableKeys() {
+         List<String> keys = new ArrayList<>();
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
-index c38133e..6e1ac2d 100644
+index c38133e..28f7f5a 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
-@@ -1112,9 +1112,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -3,6 +3,7 @@ package com.gathin.tvhome;
+ import android.animation.ArgbEvaluator;
+ import android.animation.ValueAnimator;
+ import android.app.Activity;
++import android.app.ActivityManager;
+ import android.app.Dialog;
+ import android.content.ActivityNotFoundException;
+ import android.content.BroadcastReceiver;
+@@ -23,6 +24,8 @@ import android.graphics.drawable.BitmapDrawable;
+ import android.graphics.drawable.ColorDrawable;
+ import android.graphics.drawable.Drawable;
+ import android.graphics.drawable.GradientDrawable;
++import android.media.AudioDeviceInfo;
++import android.media.AudioManager;
+ import android.media.tv.TvContract;
+ import android.media.tv.TvInputInfo;
+ import android.media.tv.TvInputManager;
+@@ -208,6 +211,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+     private boolean libraryFocusPending;
+     private RecyclerView.OnScrollListener pendingFocusScroll;
+ 
++    private boolean resumed;
++    private TextView weatherView;
++    private boolean showWeather;
++    private View alertInputBanner;
++    private TextView alertInputText;
++    private String alertInputId;
++    private View leftBlock;
++    private View topButtons;
++    private int driftStep;
++    private static final float[][] DRIFT_DP = {
++        {0f, 0f}, {1.5f, 0f}, {1.5f, 1.5f}, {0f, 1.5f},
++        {-1.5f, 0f}, {-1.5f, -1.5f}, {0f, -1.5f}
++    };
++
+     private final Handler handler = new Handler(Looper.getMainLooper());
+     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
+     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
+@@ -231,6 +248,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+         @Override
+         public void onInputRemoved(String inputId) {
+             updateInputsButton();
++            if (inputId.equals(alertInputId)) hideAlert();
++        }
++
++        @Override
++        public void onInputStateChanged(String inputId, int state) {
++            updateInputsButton();
++            if (state == TvInputManager.INPUT_STATE_CONNECTED && resumed) {
++                showAlert(inputId);
++            }
+         }
+     };
+     /** Listens for any VPN coming up or going down, even one this app's traffic is excluded from. */
+@@ -264,6 +290,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+             updateWifiLabel();
+             sky.update();
+             wallpaperPlayer.update();
++            updateWeather();
++            applyPixelDrift();
+             handler.postDelayed(this, MINUTE_MS);
+         }
+     };
+@@ -483,10 +511,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+         btnReorder.setOnClickListener(v -> toggleReorder());
+         btnReorder.setVisibility(cfg.reorderButton ? View.VISIBLE : View.GONE);
+         btnSettings.setOnLongClickListener(v -> {
+-            showSettingsMenu();
++            showControlCenter(btnSettings);
+             return true;
+         });
+ 
++        weatherView = findViewById(R.id.weather);
++        showWeather = getResources().getBoolean(R.bool.show_weather);
++        alertInputBanner = findViewById(R.id.alertInputBanner);
++        alertInputText = findViewById(R.id.alertInputText);
++        leftBlock = findViewById(R.id.leftBlock);
++        topButtons = findViewById(R.id.topButtons);
++        if (alertInputBanner != null) {
++            alertInputBanner.setOnClickListener(v -> {
++                if (alertInputId != null) {
++                    String id = alertInputId;
++                    hideAlert();
++                    openInput(id);
++                }
++            });
++        }
++
+         // Keep focus on the top bar at its ends and at the top: Android's focus finder would otherwise
+         // jump to a tile far below when there is nothing in that direction.
+         boolean rtlMenuBar = getResources().getBoolean(R.bool.rtl_menu_bar);
+@@ -578,6 +622,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+     @Override
+     protected void onResume() {
+         super.onResume();
++        resumed = true;
+         // A festival that started or ended while Home was in the background: rebuild with or without it.
+         if (festive != festival.active(LocalDate.now())) {
+             recreate();
+@@ -593,6 +638,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+         updateRace();
+         updateWifiLabel();
+         updateInputsButton();
++        updateWeather();
+         if (showStats) startStats();
+         sky.update();
+         wallpaperPlayer.start();
+@@ -692,6 +738,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+     @Override
+     protected void onPause() {
+         super.onPause();
++        resumed = false;
++        hideAlert();
+         endReorder();   // Home or another app while reordering keeps the order so far
+         wallpaperPlayer.stop();
+         stopAmbientAnimation();
+@@ -727,6 +775,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+     @Override
+     protected void onDestroy() {
+         super.onDestroy();
++        hideAlert();
+         wallpaperPlayer.close();
+         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
+         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
+@@ -770,6 +819,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+     @Override
+     public boolean dispatchKeyEvent(KeyEvent event) {
+         if (handleSettingsKey(event)) return true;
++        if (alertInputBanner != null && alertInputBanner.getVisibility() == View.VISIBLE) {
++            boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
++            int code = event.getKeyCode();
++            boolean ok = code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER
++                    || code == KeyEvent.KEYCODE_NUMPAD_ENTER;
++            boolean back = code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE;
++            if (ok) {
++                if (down && alertInputId != null) {
++                    String id = alertInputId;
++                    hideAlert();
++                    openInput(id);
++                }
++                return true;
++            } else if (back) {
++                if (down) hideAlert();
++                return true;
++            }
++        }
+         if (!reordering) return super.dispatchKeyEvent(event);
+         if (dockEditing) return dispatchDockEdit(event);
+         boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
+@@ -1019,7 +1086,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+ 
+     @Override
+     public void onBackPressed() {
+-        // Home screen: Back goes nowhere.
++        if (alertInputBanner != null && alertInputBanner.getVisibility() == View.VISIBLE) {
++            hideAlert();
++            return;
++        }
++        if (reordering) {
++            if (movingKey != null) {
++                drop();
++            } else {
++                endReorder();
++            }
++            return;
++        }
+     }
+ 
+     // ---- glass highlight -------------------------------------------------------------------------
+@@ -1112,9 +1190,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              }
              showHero(position, scroll ? r.top - dy : r.top);
          } else {
@@ -13,7 +273,54 @@ index c38133e..6e1ac2d 100644
              // Scroll just enough so the whole glass (not only the tile) is visible.
              revealRect.set(0, -(int) pad * 2, item.getWidth(), item.getHeight() + (int) pad);
              grid.requestChildRectangleOnScreen(item, revealRect, reducedMotion);
-@@ -1861,6 +1859,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1657,6 +1733,46 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+         return true;
+     }
+ 
++    @Override
++    public void onTileLongPress(int position, View card) {
++        View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
++        LinearLayout rows = panel.findViewById(R.id.rows);
++        PopupWindow popup = glassPopup(panel, (int) (220 * density));
++        if (adapter.canMove(position)) {
++            addSettingsMenuRow(rows, popup, R.string.move_app, () -> {
++                if (!reordering) beginReorder();
++                pickUp(position);
++                Toast.makeText(this, R.string.move_hint, Toast.LENGTH_LONG).show();
++                refocusAfterLayout(position);
++            });
++        }
++        addSettingsMenuRow(rows, popup, R.string.app_info, () -> adapter.openAppInfo(position));
++        addSettingsMenuRow(rows, popup, R.string.reset_order, () -> {
++            File orderFile = Order.file(this);
++            if (orderFile.exists()) orderFile.delete();
++            adapter.setSavedOrder(Collections.emptyMap());
++            lastFocused = 0;
++            lastFocusedKey = null;
++            reloadTiles();
++        });
++        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
++        popup.setWidth(Math.max((int) (220 * density), panel.getMeasuredWidth()));
++        int panelH = panel.getMeasuredHeight();
++        popup.setHeight(panelH);
++        int[] at = new int[2];
++        card.getLocationInWindow(at);
++        int gap = (int) (10 * density);
++        boolean fitsBelow = at[1] + card.getHeight() + gap + panelH <= root.getHeight();
++        if (fitsBelow) {
++            dropIn(popup, panel, card, Gravity.START);
++        } else {
++            panel.setAlpha(0f);
++            popup.showAsDropDown(card, 0, -(card.getHeight() + gap + panelH), Gravity.START);
++            panel.animate().alpha(1f).setDuration(180).start();
++        }
++        rows.getChildAt(0).requestFocus();
++    }
++
+     @Override public void onLibraryFocused() {
+         libraryFocusPending = false;
+         hideGlass();
+@@ -1861,6 +1977,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              if (!online) {
                  text = getString(R.string.offline);
                  vpn = false;
@@ -21,7 +328,7 @@ index c38133e..6e1ac2d 100644
              } else if (ethernet) {
                  text = getString(R.string.ethernet);
                  icon = R.drawable.ic_ethernet;
-@@ -1878,29 +1877,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1878,29 +1995,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              }
          } catch (Exception ignored) {
          }
@@ -54,41 +361,601 @@ index c38133e..6e1ac2d 100644
          if (festive && diya != null) {
              if (online && flame == 0) flame = 3;   // online some other way (cellular, USB tethering)
              diya.setSteady(steady);
+@@ -2259,23 +2356,225 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+ 
+     // ---- launcher settings and module cards -------------------------------------------------------
+ 
+-    /** Keep a normal Settings click for the TV; the launcher's choices live behind hold OK. */
+-    private void showSettingsMenu() {
+-        View anchor = findViewById(R.id.btnSettings);
++    /** Control Center (hold Settings): sleep timer, turn off, memory, sound, screensaver, launcher settings. */
++    private void showControlCenter(View anchor) {
+         View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+         LinearLayout rows = panel.findViewById(R.id.rows);
+-        PopupWindow popup = glassPopup(panel, (int) (200 * density));
++        PopupWindow popup = glassPopup(panel, (int) (260 * density));
++
++        // Heading
++        TextView heading = new TextView(this);
++        heading.setText(getString(R.string.control_center).toUpperCase(Locale.ROOT));
++        heading.setTextColor(0x8CFFFFFF);
++        heading.setTextSize(11f);
++        heading.setLetterSpacing(0.18f);
++        heading.setTypeface(getResources().getFont(R.font.outfit));
++        heading.setSingleLine(true);
++        heading.setPadding((int) (12 * density), (int) (8 * density), (int) (12 * density), (int) (6 * density));
++        rows.addView(heading);
++
++        // Sleep Timer
++        final TextView[] timerStatus = new TextView[1];
++        timerStatus[0] = addControlCenterRow(rows, popup, getString(R.string.sleep_timer), sleepStatus(), null, () -> {
++            Sleep.cycle(this);
++            if (timerStatus[0] != null) timerStatus[0].setText(sleepStatus());
++        });
++
++        // Standby
++        addControlCenterRow(rows, popup, getString(R.string.sleep_now), null, () -> Sleep.now(this), null);
++
++        // Free Memory
++        addControlCenterRow(rows, popup, getString(R.string.free_memory),
++                getString(R.string.memory_free, availableMb()), this::freeMemory, null);
++
++        // Sound Output
++        addControlCenterRow(rows, popup, getString(R.string.sound_output),
++                getString(soundbarConnected() ? R.string.soundbar : R.string.tv_speakers),
++                () -> open(new Intent(Settings.ACTION_SOUND_SETTINGS)), null);
++
++        // Screensaver
++        addControlCenterRow(rows, popup, getString(R.string.screensaver), null, () -> {
++            Intent ss = new Intent(Intent.ACTION_MAIN).setClassName("com.android.systemui", "com.android.systemui.Somnambulator");
++            ss.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++            try {
++                startActivity(ss);
++            } catch (ActivityNotFoundException ignored) {
++            }
++        }, null);
++
++        addSeparator(rows);
++
++        // Launcher Settings
+         addSettingsMenuRow(rows, popup, R.string.launcher_settings, () -> startActivityForResult(
+                 new Intent(this, LauncherSettingsActivity.class), LAUNCHER_SETTINGS_REQUEST));
+         if (moduleCards) addSettingsMenuRow(rows, popup, R.string.module_cards, this::showModuleCards);
+         if (dockRow) addSettingsMenuRow(rows, popup, R.string.dock_edit, this::startDockEdit);
+         addSettingsMenuRow(rows, popup, R.string.reorder, this::toggleReorder);
++
+         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+-        popup.setWidth(Math.max((int) (200 * density), panel.getMeasuredWidth()));
+-        // Hebrew puts Settings at the left of the header: grow the menu inward from it.
++        popup.setWidth(Math.max((int) (260 * density), panel.getMeasuredWidth()));
+         dropIn(popup, panel, anchor, getResources().getBoolean(R.bool.rtl_menu_bar)
+                 ? Gravity.START : Gravity.END);
+-        rows.getChildAt(0).requestFocus();
++        if (rows.getChildCount() > 1) {
++            rows.getChildAt(1).requestFocus();
++        }
++    }
++
++    private TextView addControlCenterRow(LinearLayout rows, PopupWindow popup, String title, String status,
++                                         Runnable action, Runnable stay) {
++        View row = getLayoutInflater().inflate(R.layout.item_input, rows, false);
++        row.findViewById(R.id.icon).setVisibility(View.GONE);
++        row.findViewById(R.id.dot).setVisibility(View.GONE);
++        TextView titleView = row.findViewById(R.id.title);
++        titleView.setText(title);
++        TextView statusView = row.findViewById(R.id.status);
++        if (status != null) {
++            statusView.setText(status);
++            statusView.setVisibility(View.VISIBLE);
++        } else {
++            statusView.setVisibility(View.GONE);
++        }
++        row.setOnClickListener(v -> {
++            if (stay != null) {
++                stay.run();
++                return;
++            }
++            popup.dismiss();
++            if (action != null) action.run();
++        });
++        final boolean[] pressed = {false};
++        row.setOnKeyListener((v, code, event) -> {
++            if (code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER) return false;
++            if (event.getAction() == KeyEvent.ACTION_DOWN) {
++                if (event.getRepeatCount() == 0) pressed[0] = true;
++                return true;
++            }
++            boolean activate = pressed[0];
++            pressed[0] = false;
++            if (activate) {
++                if (stay != null) {
++                    stay.run();
++                } else {
++                    popup.dismiss();
++                    if (action != null) action.run();
++                }
++            }
++            return true;
++        });
++        rows.addView(row);
++        return statusView;
++    }
++
++    private String sleepStatus() {
++        int left = Sleep.minutesLeft(this);
++        return left > 0 ? getString(R.string.minutes_left, left) : getString(R.string.off);
++    }
++
++    private long availableMb() {
++        ActivityManager am = getSystemService(ActivityManager.class);
++        if (am == null) return 0;
++        ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
++        am.getMemoryInfo(mi);
++        return mi.availMem / (1024 * 1024);
++    }
++
++    private boolean soundbarConnected() {
++        AudioManager am = getSystemService(AudioManager.class);
++        if (am == null) return false;
++        for (AudioDeviceInfo d : am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
++            if (d.getType() == AudioDeviceInfo.TYPE_HDMI_ARC) return true;
++        }
++        return false;
++    }
++
++    private void freeMemory() {
++        ActivityManager am = getSystemService(ActivityManager.class);
++        if (am == null) return;
++        ActivityManager.MemoryInfo before = new ActivityManager.MemoryInfo();
++        am.getMemoryInfo(before);
++        for (ApplicationInfo ai : getPackageManager().getInstalledApplications(0)) {
++            if ((ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
++            if (ai.packageName.equals(getPackageName())) continue;
++            am.killBackgroundProcesses(ai.packageName);
++        }
++        handler.postDelayed(() -> {
++            ActivityManager.MemoryInfo after = new ActivityManager.MemoryInfo();
++            am.getMemoryInfo(after);
++            long freed = Math.max(0, after.availMem - before.availMem) / (1024 * 1024);
++            Toast.makeText(this, getString(R.string.memory_freed, freed, after.availMem / (1024 * 1024)),
++                    Toast.LENGTH_LONG).show();
++        }, 800);
++    }
++
++    private void updateWeather() {
++        if (!showWeather || weatherView == null) return;
++        Weather.refresh(this, text -> {
++            if (weatherView != null) {
++                weatherView.setText(text);
++                weatherView.setVisibility(View.VISIBLE);
++            }
++        });
++    }
++
++    private void applyPixelDrift() {
++        if (leftBlock == null && topButtons == null) return;
++        driftStep = (driftStep + 1) % DRIFT_DP.length;
++        float dx = DRIFT_DP[driftStep][0] * density;
++        float dy = DRIFT_DP[driftStep][1] * density;
++        if (leftBlock != null) {
++            leftBlock.animate().translationX(dx).translationY(dy).setDuration(2000).start();
++        }
++        if (topButtons != null) {
++            topButtons.animate().translationX(dx).translationY(dy).setDuration(2000).start();
++        }
++    }
++
++    private String inputLabel(String inputId) {
++        TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
++        if (tim == null) return inputId;
++        try {
++            TvInputInfo info = tim.getTvInputInfo(inputId);
++            if (info == null) return inputId;
++            CharSequence custom = info.loadCustomLabel(this);
++            if (custom != null && custom.length() > 0) return custom.toString();
++            CharSequence l = info.loadLabel(this);
++            String label = l == null ? info.getId() : l.toString();
++            if (info.getType() == TvInputInfo.TYPE_HDMI && !label.toUpperCase(Locale.ROOT).contains("HDMI")) {
++                label = "HDMI " + label;
++            }
++            return label;
++        } catch (Exception e) {
++            return inputId;
++        }
++    }
++
++    private final Runnable hideAlert = () -> {
++        if (alertInputBanner == null || alertInputBanner.getVisibility() != View.VISIBLE) return;
++        alertInputBanner.animate().cancel();
++        alertInputBanner.animate().alpha(0f).translationY(-20f * density).setDuration(250).withEndAction(() -> {
++            alertInputBanner.setVisibility(View.GONE);
++            alertInputId = null;
++        }).start();
++    };
++
++    private void showAlert(String inputId) {
++        if (alertInputBanner == null || alertInputText == null) return;
++        alertInputId = inputId;
++        String name = inputLabel(inputId);
++        alertInputText.setText(getString(R.string.input_connected, name));
++        alertInputBanner.animate().cancel();
++        alertInputBanner.setAlpha(0f);
++        alertInputBanner.setTranslationY(-20f * density);
++        alertInputBanner.setVisibility(View.VISIBLE);
++        alertInputBanner.animate().alpha(1f).translationY(0f).setDuration(300)
++                .setInterpolator(new android.view.animation.DecelerateInterpolator(2f)).start();
++        handler.removeCallbacks(hideAlert);
++        handler.postDelayed(hideAlert, 8000);
++    }
++
++    private void hideAlert() {
++        handler.removeCallbacks(hideAlert);
++        hideAlert.run();
+     }
+ 
+     private void addSettingsMenuRow(LinearLayout rows, PopupWindow popup, int title, Runnable action) {
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/Sleep.java b/launcher/app/src/main/java/com/gathin/tvhome/Sleep.java
+new file mode 100644
+index 0000000..c1142d6
+--- /dev/null
++++ b/launcher/app/src/main/java/com/gathin/tvhome/Sleep.java
+@@ -0,0 +1,87 @@
++package com.gathin.tvhome;
++
++import android.app.AlarmManager;
++import android.app.PendingIntent;
++import android.content.BroadcastReceiver;
++import android.content.Context;
++import android.content.Intent;
++import android.content.SharedPreferences;
++import android.widget.Toast;
++
++/**
++ * Standby and sleep timer. Standby is executed by {@link SleepService}.
++ */
++final class Sleep {
++
++    private static final String PREFS = "sleep_prefs";
++    private static final String AT = "sleep_at";
++    private static final long STALE_MS = 2 * 60_000L;
++    private static final int[] STEPS = {30, 60, 90};
++
++    private Sleep() {
++    }
++
++    private static SharedPreferences prefs(Context c) {
++        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
++    }
++
++    /** BroadcastReceiver triggered when the sleep timer expires. */
++    public static class Alarm extends BroadcastReceiver {
++        @Override
++        public void onReceive(Context c, Intent intent) {
++            long at = prefs(c).getLong(AT, 0);
++            prefs(c).edit().remove(AT).apply();
++            if (at > 0 && Math.abs(System.currentTimeMillis() - at) < STALE_MS) {
++                now(c);
++            }
++        }
++    }
++
++    /** Put TV into standby immediately. */
++    static boolean now(Context c) {
++        if (SleepService.lock()) {
++            return true;
++        }
++        Toast.makeText(c, R.string.sleep_needs_setup, Toast.LENGTH_LONG).show();
++        return false;
++    }
++
++    /** Minutes left on the running sleep timer, or 0 if off. */
++    static int minutesLeft(Context c) {
++        long at = prefs(c).getLong(AT, 0);
++        long left = at - System.currentTimeMillis();
++        return left > 0 ? (int) Math.ceil(left / 60_000.0) : 0;
++    }
++
++    /** Cycles through Off -> 30 -> 60 -> 90 -> Off. Returns new minutes. */
++    static int cycle(Context c) {
++        int left = minutesLeft(c);
++        int next = 0;
++        for (int s : STEPS) {
++            if (s > left) {
++                next = s;
++                break;
++            }
++        }
++        set(c, next);
++        return next;
++    }
++
++    private static void set(Context c, int minutes) {
++        AlarmManager am = c.getSystemService(AlarmManager.class);
++        PendingIntent pi = PendingIntent.getBroadcast(c, 0, new Intent(c, Alarm.class),
++                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
++        if (am != null) {
++            am.cancel(pi);
++        }
++        if (minutes <= 0) {
++            prefs(c).edit().remove(AT).apply();
++            return;
++        }
++        long at = System.currentTimeMillis() + minutes * 60_000L;
++        prefs(c).edit().putLong(AT, at).apply();
++        if (am != null) {
++            am.setExactAndAllowWhileIdle(AlarmManager.RTC, at, pi);
++        }
++    }
++}
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/SleepService.java b/launcher/app/src/main/java/com/gathin/tvhome/SleepService.java
+new file mode 100644
+index 0000000..1f2a572
+--- /dev/null
++++ b/launcher/app/src/main/java/com/gathin/tvhome/SleepService.java
+@@ -0,0 +1,39 @@
++package com.gathin.tvhome;
++
++import android.accessibilityservice.AccessibilityService;
++import android.content.Intent;
++import android.view.accessibility.AccessibilityEvent;
++
++/**
++ * Turns the TV into standby for Control Center and the sleep timer.
++ * Uses the standard accessibility "lock screen" action.
++ * It listens to no events and reads no screen content.
++ */
++public class SleepService extends AccessibilityService {
++
++    private static SleepService running;
++
++    /** True when the TV went to standby; false when the service is not enabled. */
++    static boolean lock() {
++        return running != null && running.performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN);
++    }
++
++    @Override
++    protected void onServiceConnected() {
++        running = this;
++    }
++
++    @Override
++    public boolean onUnbind(Intent intent) {
++        running = null;
++        return super.onUnbind(intent);
++    }
++
++    @Override
++    public void onAccessibilityEvent(AccessibilityEvent event) {
++    }
++
++    @Override
++    public void onInterrupt() {
++    }
++}
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/Weather.java b/launcher/app/src/main/java/com/gathin/tvhome/Weather.java
+new file mode 100644
+index 0000000..f70a7ae
+--- /dev/null
++++ b/launcher/app/src/main/java/com/gathin/tvhome/Weather.java
+@@ -0,0 +1,214 @@
++package com.gathin.tvhome;
++
++import android.content.Context;
++import android.content.SharedPreferences;
++import android.content.pm.PackageManager;
++import android.location.Location;
++import android.location.LocationManager;
++import android.os.Handler;
++import android.os.Looper;
++
++import org.json.JSONObject;
++
++import java.io.ByteArrayOutputStream;
++import java.io.InputStream;
++import java.net.HttpURLConnection;
++import java.net.URL;
++import java.util.Locale;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
++
++/**
++ * Current weather for the launcher header.
++ * Uses Open-Meteo (free, no API key, privacy-respecting).
++ * Location from Android system or IP geolocation once a day.
++ * Weather updates every 30 minutes, cached locally.
++ */
++final class Weather {
++
++    interface Listener {
++        void onWeather(String text);
++    }
++
++    private static final String PREFS = "weather_prefs";
++    private static final long WEATHER_MS = 30 * 60_000L;
++    private static final long LOCATION_MS = 24 * 60 * 60_000L;
++    private static final ExecutorService IO = Executors.newSingleThreadExecutor();
++    private static final Handler MAIN = new Handler(Looper.getMainLooper());
++    private static volatile boolean running;
++
++    private Weather() {
++    }
++
++    static void refresh(Context ctx, Listener listener) {
++        Context app = ctx.getApplicationContext();
++        SharedPreferences p = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
++        String cached = p.getString("text", null);
++        if (cached != null) {
++            listener.onWeather(cached);
++        }
++
++        long now = System.currentTimeMillis();
++        if ((now - p.getLong("time", 0) < WEATHER_MS) || running) {
++            return;
++        }
++
++        running = true;
++        IO.execute(() -> {
++            try {
++                String text = fetch(app, p);
++                if (text != null) {
++                    p.edit().putString("text", text).putLong("time", System.currentTimeMillis()).apply();
++                    MAIN.post(() -> listener.onWeather(text));
++                }
++            } catch (Exception ignored) {
++            } finally {
++                running = false;
++            }
++        });
++    }
++
++    private static String fetch(Context ctx, SharedPreferences p) {
++        try {
++            boolean staleLoc = System.currentTimeMillis() - p.getLong("locTime", 0) > LOCATION_MS || !p.contains("lat");
++            if (staleLoc) {
++                boolean found = locateDevice(ctx, p);
++                if (!found) {
++                    found = locateByIp(p, "https://ipapi.co/json/") || locateByIp(p, "https://ipwho.is/");
++                }
++                if (!found && !p.contains("lat")) {
++                    return null;
++                }
++            }
++
++            float lat = p.getFloat("lat", 0);
++            float lon = p.getFloat("lon", 0);
++            boolean fahrenheit = isFahrenheitLocale();
++            String unitParam = fahrenheit ? "&temperature_unit=fahrenheit" : "";
++
++            String url = String.format(Locale.US,
++                    "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,weather_code,is_day%s",
++                    lat, lon, unitParam);
++
++            byte[] data = httpGet(url, 5000);
++            if (data == null) return null;
++
++            JSONObject root = new JSONObject(new String(data));
++            JSONObject cur = root.getJSONObject("current");
++            int code = cur.getInt("weather_code");
++            boolean isDay = cur.optInt("is_day", 1) == 1;
++            int temp = (int) Math.round(cur.getDouble("temperature_2m"));
++
++            return icon(code, isDay) + "  " + temp + "°";
++        } catch (Exception e) {
++            return null;
++        }
++    }
++
++    private static boolean isFahrenheitLocale() {
++        Locale l = Locale.getDefault();
++        return "US".equalsIgnoreCase(l.getCountry()) || "LR".equalsIgnoreCase(l.getCountry()) || "MM".equalsIgnoreCase(l.getCountry());
++    }
++
++    private static boolean locateDevice(Context ctx, SharedPreferences p) {
++        try {
++            if (ctx.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
++                return false;
++            }
++            LocationManager lm = ctx.getSystemService(LocationManager.class);
++            if (lm == null) return false;
++
++            Location best = null;
++            for (String provider : lm.getProviders(true)) {
++                Location loc = lm.getLastKnownLocation(provider);
++                if (loc != null && (best == null || loc.getTime() > best.getTime())) {
++                    best = loc;
++                }
++            }
++            if (best != null) {
++                p.edit().putFloat("lat", (float) best.getLatitude())
++                        .putFloat("lon", (float) best.getLongitude())
++                        .putLong("locTime", System.currentTimeMillis()).apply();
++                return true;
++            }
++        } catch (Exception ignored) {
++        }
++        return false;
++    }
++
++    private static boolean locateByIp(SharedPreferences p, String endpoint) {
++        try {
++            byte[] data = httpGet(endpoint, 4000);
++            if (data == null) return false;
++            JSONObject json = new JSONObject(new String(data));
++            double lat = json.optDouble("latitude", json.optDouble("lat", Double.NaN));
++            double lon = json.optDouble("longitude", json.optDouble("lon", Double.NaN));
++            if (!Double.isNaN(lat) && !Double.isNaN(lon)) {
++                p.edit().putFloat("lat", (float) lat)
++                        .putFloat("lon", (float) lon)
++                        .putLong("locTime", System.currentTimeMillis()).apply();
++                return true;
++            }
++        } catch (Exception ignored) {
++        }
++        return false;
++    }
++
++    private static byte[] httpGet(String urlStr, int timeoutMs) {
++        try {
++            HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
++            conn.setConnectTimeout(timeoutMs);
++            conn.setReadTimeout(timeoutMs);
++            conn.setRequestProperty("User-Agent", "CleanYourTV/1.0");
++            try (InputStream in = conn.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
++                byte[] buf = new byte[2048];
++                int n;
++                while ((n = in.read(buf)) != -1) {
++                    out.write(buf, 0, n);
++                }
++                return out.toByteArray();
++            }
++        } catch (Exception e) {
++            return null;
++        }
++    }
++
++    /** Map WMO Weather Codes to weather emojis. */
++    private static String icon(int code, boolean isDay) {
++        switch (code) {
++            case 0: // Clear sky
++                return isDay ? "☀️" : "🌙";
++            case 1: // Mainly clear
++            case 2: // Partly cloudy
++                return isDay ? "⛅" : "☁️";
++            case 3: // Overcast
++                return "☁️";
++            case 45: // Fog
++            case 48:
++                return "🌫️";
++            case 51: // Drizzle
++            case 53:
++            case 55:
++            case 61: // Rain
++            case 63:
++            case 65:
++            case 80:
++            case 81:
++            case 82:
++                return "🌧️";
++            case 71: // Snow
++            case 73:
++            case 75:
++            case 77:
++            case 85:
++            case 86:
++                return "❄️";
++            case 95: // Thunderstorm
++            case 96:
++            case 99:
++                return "⛈️";
++            default:
++                return isDay ? "☀️" : "🌙";
++        }
++    }
++}
 diff --git a/launcher/app/src/main/res/drawable/banner_youtube.png b/launcher/app/src/main/res/drawable/banner_youtube.png
 new file mode 100644
-index 0000000000000000000000000000000000000000..0a247900f75a2330b9d4038dca004db8dd651bb6
-GIT binary patch
-literal 1330
-zcmV-21<m@2P)<h;3K|Lk000e1NJLTq00BS%006WI0{{R3(mDkr0001rP)t-s_4W1m
-zxVZXydiz^j{XISVYisw%$N8C={7g*#9v=Sy04OLZ!otG#=H~q^E$Haz&d$!;+uOCZ
-zwKOy|o12@Cj*d=FPJw}eTU%SGsHk*wboSQP_^7C8XlOw}LI1$O|A2u15D@?W|Nr3N
-z|6pMMKtTD4iT|LW|M2ktP*DFcF#nK{|8Q{sARt`x!c+hN1Y=1=K~#7F?8>zfz(5cL
-zurodN->;ccryeO=2mk;800000000000000000000;P1Lke;dZr^mO|r-iVa@GS>D<
-z9ZR261d$i^%|p3y5D3FuFK_`=kWfxa@5%c=-W9{}?^q+og@oYoH!Ub@CHsvKtF?%$
-zi);MG^1vN}W#`w)&%OBkiv^@`Naj&)tl4G=0CZenss6wT3~KJEn5TB*hHVB1pncy0
-zKmXjD&n#g0ip~!ecc{Y^`0Zx`a3AdWirx>c8`kV_1^!4O@B}w8?(oCGjfTS&c=|I5
-zr^pL)7Bku&uE1|;1pW>u9O<edxkIuI=^flLxsiR(0zak^_%WQY36mBR+U!{4wFT6H
-zpVJ8ZjzWeyYa!xL1!4_JRme<a*7~`q4p`vNM6kd>601?fY|2q!h2(u1Jsz;Y4>2ic
-z=NCKFF%s4+En;NjCiFCfoNc>e^?T7eW&)RjAkdosr)?z*sLr^0zSCI+US3^qDv&e?
-zou?YJd6h&{^S~%+B=5<3!`B5a1VNxQ++ieh$bkc!Rp902+0E7h+n~*0LGC!k$YcU5
-zzi8ok#~XbcgST;k|GB%^QlJVA88j9u4*ao10w)eMc^n5iOC1e?m-puzRnnmL*$dp}
-zeVRZg5eN{k`5Hq;fu5^}tptuf<Hl!;3$RnR_CKW)IJ7mN#~7;yw1V;p^qf6zA<+8&
-z+a)k!HR+MxluV#tOitvuLGg|svk3%G7n=#hB+@3d6()2T6y|Uefg`=`=}<-0<gm>t
-z5Zpg+BoG%tg`{w?VD(HQ(4W&{Am-t1UV-51W<!CU%OT8FL6e=3RWgAB153gy+;6iA
-z1ZOWB39Lwg(XF?s`&SfbLr6~!_r(ch98@%KB4kV{P~rm-f#pnLHbS6W5ZI>_$l?Oa
-zT13#6M&3t(8<jCY1%XW_fkynJ!AFZKr0JuZ$|R7|7xO3w2JV>HQQ-E?1oH4Z6fZDC
-zJB!v8wqSu78ma*4Wm`mm%HPs2Phel}mr6MV%DKSuzSfKgv~Tq+T&)SjyRu~q6tpNb
-zuP9Kg3B+k$jgvI~K1T&AI^qud>is|nEaT;(h(IC@&DE3w2OQU=BQ0>6a$awn3xtGW
-z?S9xJS!osp;+aNHR3OeNYs4@gqv6{Y@`7bVU>k<o=Qq*|r&pEXO9Dqf7?nj3V)$4!
-z6J+8GEWwobstS3<HzH7TPf$>y>jh>4V?lgQMdmG-ig?L9A`q7aFy1R+To9-hf;fOF
-z%z0po+2#-tC?`&-)hyReEC{4QtymXmhM6f{bIMT8Mw^I0rp??R&2?aUNuZhsA*Pe#
-z%#@lq=!)9v1$u|Vk+1~NH~F-?yi657LO*T2kXaC71oJ1J8WxbP|6BDS3fpWL2m26#
-z++-`Fjt6OUT<B?qK5lnC{0-Nq>_}|O|Cjle|J%Rq+pz!u006)sf9qlFDUXzY00000
-o0000000000000000001B7UOYder5u@CIA2c07*qoM6N<$f)n;*3IG5A
-
-literal 0
-HcmV?d00001
-
+index 0000000..0a24790
+Binary files /dev/null and b/launcher/app/src/main/res/drawable/banner_youtube.png differ
 diff --git a/launcher/app/src/main/res/drawable/ic_wifi_off.xml b/launcher/app/src/main/res/drawable/ic_wifi_off.xml
 new file mode 100644
 index 0000000..65231c4
@@ -106,7 +973,7 @@ index 0000000..65231c4
 +        android:pathData="M23.64,7c-0.45,-0.34 -4.93,-4 -11.64,-4c-1.5,0 -2.8,0.19 -3.95,0.47L10.74,6.16C11.32,6.05 11.95,6 12,6c5.25,0 9.01,2.8 9.4,3.11L23.64,7zM3.41,1.86L2,3.27l2.08,2.08C2.56,6.23 1.46,7.21 1.36,7.29L12,20.54l3.52,-4.37 5.07,5.07 1.41,-1.41L3.41,1.86zM12,17.27l-5.35,-6.65c0.97,-0.74 2.87,-1.82 5.35,-1.82 0.35,0 0.69,0.03 1.02,0.07l-2.02,2.02c-0.33,0.39 -0.5,0.88 -0.5,1.38 0,0.5 0.17,0.99 0.5,1.38L12,17.27z" />
 +</vector>
 diff --git a/launcher/app/src/main/res/layout/activity_main.xml b/launcher/app/src/main/res/layout/activity_main.xml
-index b8895f0..38f3990 100644
+index b8895f0..14413f5 100644
 --- a/launcher/app/src/main/res/layout/activity_main.xml
 +++ b/launcher/app/src/main/res/layout/activity_main.xml
 @@ -187,7 +187,8 @@
@@ -128,7 +995,7 @@ index b8895f0..38f3990 100644
                          android:layout_gravity="bottom"
                          android:layout_marginStart="16dp"
                          android:layout_marginEnd="16dp"
-@@ -236,7 +237,7 @@
+@@ -236,9 +237,25 @@
                          android:layout_weight="1"
                          android:layout_height="wrap_content"
                          android:layout_gravity="bottom"
@@ -136,8 +1003,26 @@ index b8895f0..38f3990 100644
 +                        android:layout_marginBottom="8dp"
                          android:orientation="vertical">
  
++                        <!-- Live weather, shown when show_weather is on and data has arrived -->
++                        <TextView
++                            android:id="@+id/weather"
++                            android:gravity="left"
++                            android:layout_width="match_parent"
++                            android:layout_height="wrap_content"
++                            android:layout_marginBottom="4dp"
++                            android:singleLine="true"
++                            android:ellipsize="end"
++                            android:textColor="#CCFFFFFF"
++                            android:textSize="15sp"
++                            android:fontFamily="@font/outfit_regular"
++                            android:letterSpacing="0.02"
++                            android:includeFontPadding="false"
++                            android:visibility="gone" />
++
                          <!-- Shamsi date ("27 Mehr 1405"), shown when shamsi_date is on. -->
-@@ -259,16 +260,16 @@
+                         <TextView
+                             android:id="@+id/shamsiDate"
+@@ -259,16 +276,16 @@
                              android:gravity="left"
                              android:layout_width="match_parent"
                              android:layout_height="wrap_content"
@@ -157,7 +1042,7 @@ index b8895f0..38f3990 100644
                              android:textAllCaps="true" />
                      </LinearLayout>
                  </LinearLayout>
-@@ -315,11 +316,8 @@
+@@ -315,11 +332,8 @@
  
                  <TextView
                      android:id="@+id/btnWifi"
@@ -171,7 +1056,7 @@ index b8895f0..38f3990 100644
                      android:drawableStart="@drawable/ic_wifi"
                      android:nextFocusDown="@+id/grid" />
  
-@@ -332,8 +330,8 @@
+@@ -332,12 +346,54 @@
  
                  <TextView
                      android:id="@+id/btnSettings"
@@ -182,6 +1067,53 @@ index b8895f0..38f3990 100644
                      android:drawableStart="@drawable/ic_settings"
                      android:nextFocusDown="@+id/grid" />
              </LinearLayout>
+-        </RelativeLayout>
++            <!-- HDMI Hotplug Alert Banner -->
++    <LinearLayout
++        android:id="@+id/alertInputBanner"
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:layout_alignParentTop="true"
++        android:layout_centerHorizontal="true"
++        android:layout_marginTop="20dp"
++        android:background="@drawable/glass_panel"
++        android:paddingStart="22dp"
++        android:paddingEnd="22dp"
++        android:paddingTop="10dp"
++        android:paddingBottom="10dp"
++        android:orientation="horizontal"
++        android:gravity="center_vertical"
++        android:elevation="16dp"
++        android:visibility="gone">
++
++        <ImageView
++            android:layout_width="18dp"
++            android:layout_height="18dp"
++            android:src="@drawable/ic_input" />
++
++        <TextView
++            android:id="@+id/alertInputText"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="10dp"
++            android:textColor="#FFFFFFFF"
++            android:textSize="14sp"
++            android:fontFamily="@font/outfit_medium" />
++
++        <TextView
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="14dp"
++            android:text="@string/switch_input"
++            android:textColor="#99FFFFFF"
++            android:textSize="13sp"
++            android:fontFamily="@font/outfit_regular" />
++    </LinearLayout>
++
++</RelativeLayout>
+ 
+         <!-- The wrapper clips at the grid's edge; the grid itself must not clip so scaled tiles can overflow their cells. -->
+         <FrameLayout
 diff --git a/launcher/app/src/main/res/values/bools.xml b/launcher/app/src/main/res/values/bools.xml
 index e83b7f9..6293ad9 100644
 --- a/launcher/app/src/main/res/values/bools.xml
@@ -194,10 +1126,10 @@ index e83b7f9..6293ad9 100644
 +    <bool name="date_single_line">false</bool>
  </resources>
 diff --git a/launcher/app/src/main/res/values/config.xml b/launcher/app/src/main/res/values/config.xml
-index 3deebbe..a6dac14 100644
+index 3deebbe..4eeb91f 100644
 --- a/launcher/app/src/main/res/values/config.xml
 +++ b/launcher/app/src/main/res/values/config.xml
-@@ -9,10 +9,10 @@
+@@ -9,24 +9,28 @@
  
      <!-- Apps pinned to the dock row at the bottom, in this order. Missing apps are skipped. -->
      <string-array name="dock_apps">
@@ -211,8 +1143,12 @@ index 3deebbe..a6dac14 100644
      </string-array>
      <!-- With fewer dock_apps than columns (or a dock app that is not installed), the free dock slots take
           the first grid apps, so the dock never shows a gap. false leaves them empty (#162); a theme can
-@@ -21,12 +21,13 @@
+          set "fill_dock": false. -->
+     <bool name="fill_dock">true</bool>
  
++    <!-- Show live weather above the date (Open-Meteo, 30 min refresh, no API key). -->
++    <bool name="show_weather">true</bool>
++
      <!-- Apps never shown as tiles (e.g. the Live TV app, which the Inputs menu already covers). -->
      <string-array name="hidden_apps">
 +        <item>com.vt.tv.tvcenter</item>
@@ -226,7 +1162,7 @@ index 3deebbe..a6dac14 100644
  
      <!-- Some TVs give their Live TV app no leanback entry point at all, so `live_tv_package` above
           resolves to nothing (TCL Android TV 9 on China-market sets is one). This action is then sent
-@@ -41,10 +42,12 @@
+@@ -41,10 +45,12 @@
  
      <!-- A tile's name instead of the app's own: "package=Name". It also shows above the dock. -->
      <string-array name="app_labels">
@@ -240,7 +1176,7 @@ index 3deebbe..a6dac14 100644
  
      <!-- TVs with no TvInputManager have no HDMI list to read, but their own source-selection panel
 diff --git a/launcher/app/src/main/res/values/strings.xml b/launcher/app/src/main/res/values/strings.xml
-index 58d2338..bb12b51 100644
+index 58d2338..0ba2c98 100644
 --- a/launcher/app/src/main/res/values/strings.xml
 +++ b/launcher/app/src/main/res/values/strings.xml
 @@ -18,7 +18,7 @@
@@ -252,3 +1188,43 @@ index 58d2338..bb12b51 100644
      <!-- Date next to the clock on Home; a locale can split it over two lines with \n. -->
      <string name="date_format_home" translatable="false">@string/date_format</string>
      <string name="stats_cpu">CPU %1$d%%</string>
+@@ -107,4 +107,29 @@
+     <!-- Cinematic top shelf (cinematic_home): the line under the focused dock app's name; %1$s is when it was
+          last opened, e.g. "5 minutes ago" or "yesterday, 9:40 pm". -->
+     <string name="last_opened">Last opened %1$s</string>
++
++    <!-- Control Center & Sleep -->
++    <string name="control_center">Control Center</string>
++    <string name="sleep_timer">Sleep timer</string>
++    <string name="sleep_now">Turn off now</string>
++    <string name="free_memory">Free up memory</string>
++    <string name="memory_free">%1$d MB free</string>
++    <string name="memory_freed">Freed %1$d MB (%2$d MB free)</string>
++    <string name="sound_output">Sound output</string>
++    <string name="soundbar">Soundbar (HDMI ARC)</string>
++    <string name="tv_speakers">TV speakers</string>
++    <string name="screensaver">Screensaver</string>
++    <string name="minutes_left">%1$d min left</string>
++    <string name="sleep_needs_setup">Standby requires SleepService enabled in accessibility</string>
++    <string name="sleep_service_desc">Enables Control Center and sleep timer to put the TV in standby</string>
++
++    <!-- App Move Mode -->
++    <string name="move_app">Move app</string>
++    <string name="move_hint">Use arrows to move, press OK to drop</string>
++    <string name="reset_order">Reset app order</string>
++    <string name="app_info">App info</string>
++
++    <!-- HDMI Hotplug Alert -->
++    <string name="input_connected">%1$s connected</string>
++    <string name="switch_input">Press OK to switch</string>
+ </resources>
+diff --git a/launcher/app/src/main/res/xml/sleep_service.xml b/launcher/app/src/main/res/xml/sleep_service.xml
+new file mode 100644
+index 0000000..928adb0
+--- /dev/null
++++ b/launcher/app/src/main/res/xml/sleep_service.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
++    android:accessibilityFeedbackType="feedbackGeneric"
++    android:description="@string/sleep_service_desc" />
