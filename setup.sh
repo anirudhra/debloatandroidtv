@@ -260,7 +260,7 @@ do_verify() {
     ensure_connected
 
     PASSED=0
-    TOTAL_CHECKS=4
+    TOTAL_CHECKS=5
 
     # 1. Launcher Check
     echo -n "[1/$TOTAL_CHECKS] Checking Default Home Launcher... "
@@ -314,6 +314,18 @@ do_verify() {
     else
         echo "INFO (Standard debloat mode active)"
         PASSED=$((PASSED + 1))
+    fi
+
+    # 5. Remote Keys & Accessibility Services Check
+    echo -n "[5/$TOTAL_CHECKS] Checking Remote Key & Standby Services... "
+    ACC_SVC="$(adb -s "$TARGET" shell "settings get secure enabled_accessibility_services" 2>/dev/null | tr -d '\r')"
+    if echo "$ACC_SVC" | grep -q "com.gathin.tvhome"; then
+        echo "PASS"
+        echo "       Active: HomeKeyService, InputKeyService, SleepService"
+        PASSED=$((PASSED + 1))
+    else
+        echo "WARN"
+        echo "       Remote key accessibility services not active. Run setup to enable."
     fi
 
     echo ""
@@ -444,11 +456,25 @@ do_apply() {
     adb -s "$TARGET" shell "pm install -r /data/local/tmp/tvhome.apk; rm -f /data/local/tmp/tvhome.apk" >/dev/null 2>&1
     adb -s "$TARGET" shell "pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION" >/dev/null 2>&1 || true
     adb -s "$TARGET" shell "pm grant com.gathin.tvhome android.permission.ACCESS_COARSE_LOCATION" >/dev/null 2>&1 || true
-    # Activate SleepService for Standby & Sleep Timer (avoids manual accessibility toggle)
-    adb -s "$TARGET" shell 'svc="com.gathin.tvhome/com.gathin.tvhome.SleepService"; cur=$(settings get secure enabled_accessibility_services); case "$cur" in *SleepService*) ;; null|"") settings put secure enabled_accessibility_services "$svc" ;; *) settings put secure enabled_accessibility_services "$cur:$svc" ;; esac; settings put secure accessibility_enabled 1' >/dev/null 2>&1 || true
-    # Force on-screen keyboard to always display (permanently prevents "Use keyboard on mobile device" suppression)
-    adb -s "$TARGET" shell "settings put secure show_ime_with_hard_keyboard 1" >/dev/null 2>&1 || true
-    echo "Launcher installed successfully."
+    # Activate CleanYourTV Accessibility Services:
+    # - HomeKeyService: intercepts Home & Settings buttons orphaned when stock Google TV launcher was disabled
+    # - InputKeyService: intercepts Input / Source buttons orphaned when stock Google TV launcher was disabled
+    # - SleepService: allows Control Center & sleep timer to put the TV in standby
+    adb -s "$TARGET" shell '
+        cur=$(settings get secure enabled_accessibility_services)
+        [ "$cur" = "null" ] && cur=""
+        for svc in com.gathin.tvhome/.HomeKeyService com.gathin.tvhome/.InputKeyService com.gathin.tvhome/.SleepService; do
+            case "$cur" in
+                *"$svc"*) ;;
+                "") cur="$svc" ;;
+                *) cur="$cur:$svc" ;;
+            esac
+        done
+        settings put secure enabled_accessibility_services "$cur"
+        settings put secure accessibility_enabled 1
+        settings put secure show_ime_with_hard_keyboard 1
+    ' >/dev/null 2>&1 || true
+    echo "Launcher installed & remote key services activated successfully."
 
     # -----------------------------------------------------------------------------
     # Configure Default Home
