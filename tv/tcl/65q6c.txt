@@ -1,0 +1,56 @@
+# TCL 65Q6C / T65Q6C QD-Mini LED Google TV (QM6 / C6K Regional Equivalent)
+# Target Device: TCL 65Q6C (BeyondTV / Android 12)
+#
+# Safe to disable with:
+#   adb shell pm disable-user --user 0 <package>
+#
+# IMPORTANT SAFETY FOR TCL:
+# Do NOT disable:
+#   - com.tcl.tv              (Live TV player)
+#   - com.tcl.tvinput         (HDMI and tuner inputs)
+#   - com.tcl.dashboard       (Quick settings & picture mode overlay)
+#   - com.tcl.providers.config(CRITICAL: disabling this drops Wi-Fi on TCL!)
+#   - com.tcl.initsetup       (System boot requirements)
+#   - com.tcl.autopair        (Bluetooth remote control pairing)
+
+# --- TCL Telemetry, Tracking & Analytics ---
+com.tcl.ttvs                           # Samba TV ACR viewing tracking, TCL "BI" analytics, Alexa core
+com.tcl.logkit                         # System log capture and telemetry upload
+com.tcl.usercenter                     # TCL account sign-in nag popups
+
+# --- TCL Ads, Promo Banners & Push Messages ---
+com.tcl.tv.plus                        # TCL TV+ promo content
+com.tcl.channelplus                    # TCL FAST live streaming channels
+com.tcl.tv.tclhome_passive             # Pushes promo cards to home screen at boot
+com.tcl.partnercustomizer              # Injects partner promos into Google TV home rows
+com.tcl.interactive                    # TCL TIAS interactive ad service
+com.tcl.smartlink.core                 # Background push / silent installer helper
+com.tcl.messagebox                     # TCL promo notifications and system banners
+
+# --- Store / Retail Demo Modes ---
+com.tcl.exhibit
+com.tcl.esticker
+com.tcl.hotelmenu
+
+# --- Unused Preloaded Apps & Tools ---
+com.tcl.ocean.instructions             # E-manual viewer
+com.tcl.repairguide                    # Repair guide
+com.tcl.browser                        # TCL stock web browser
+com.tcl.smartalexa                     # Alexa integration
+com.google.android.feedback            # Google crash reporter
+com.android.tv.feedbackconsent         # Feedback prompt
+com.google.android.apps.tv.dreamx      # Google promo screensaver
+com.google.android.play.games          # Google Play Games TV
+com.google.android.videos              # Google TV Play Movies & TV
+com.google.android.marvin.talkback     # Accessibility Suite / Switch Access (prevents remote key hijacking)
+
+# --- Stock YouTube Apps (Replaced by Ad-Free TizenTube / Tube) ---
+com.google.android.youtube.tv
+com.google.android.youtube.tvmusic
+
+# --- Google Tracking & Auto-Installers ---
+android.autoinstalls.config.google.gtvpai
+com.google.android.partnersetup
+com.google.android.syncadapters.calendar
+com.android.providers.calendar
+com.android.providers.contacts
