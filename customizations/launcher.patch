@@ -954,8 +954,39 @@ index 0000000..f70a7ae
 +}
 diff --git a/launcher/app/src/main/res/drawable/banner_youtube.png b/launcher/app/src/main/res/drawable/banner_youtube.png
 new file mode 100644
-index 0000000..0a24790
-Binary files /dev/null and b/launcher/app/src/main/res/drawable/banner_youtube.png differ
+index 0000000000000000000000000000000000000000..0a247900f75a2330b9d4038dca004db8dd651bb6
+GIT binary patch
+literal 1330
+zcmV-21<m@2P)<h;3K|Lk000e1NJLTq00BS%006WI0{{R3(mDkr0001rP)t-s_4W1m
+zxVZXydiz^j{XISVYisw%$N8C={7g*#9v=Sy04OLZ!otG#=H~q^E$Haz&d$!;+uOCZ
+zwKOy|o12@Cj*d=FPJw}eTU%SGsHk*wboSQP_^7C8XlOw}LI1$O|A2u15D@?W|Nr3N
+z|6pMMKtTD4iT|LW|M2ktP*DFcF#nK{|8Q{sARt`x!c+hN1Y=1=K~#7F?8>zfz(5cL
+zurodN->;ccryeO=2mk;800000000000000000000;P1Lke;dZr^mO|r-iVa@GS>D<
+z9ZR261d$i^%|p3y5D3FuFK_`=kWfxa@5%c=-W9{}?^q+og@oYoH!Ub@CHsvKtF?%$
+zi);MG^1vN}W#`w)&%OBkiv^@`Naj&)tl4G=0CZenss6wT3~KJEn5TB*hHVB1pncy0
+zKmXjD&n#g0ip~!ecc{Y^`0Zx`a3AdWirx>c8`kV_1^!4O@B}w8?(oCGjfTS&c=|I5
+zr^pL)7Bku&uE1|;1pW>u9O<edxkIuI=^flLxsiR(0zak^_%WQY36mBR+U!{4wFT6H
+zpVJ8ZjzWeyYa!xL1!4_JRme<a*7~`q4p`vNM6kd>601?fY|2q!h2(u1Jsz;Y4>2ic
+z=NCKFF%s4+En;NjCiFCfoNc>e^?T7eW&)RjAkdosr)?z*sLr^0zSCI+US3^qDv&e?
+zou?YJd6h&{^S~%+B=5<3!`B5a1VNxQ++ieh$bkc!Rp902+0E7h+n~*0LGC!k$YcU5
+zzi8ok#~XbcgST;k|GB%^QlJVA88j9u4*ao10w)eMc^n5iOC1e?m-puzRnnmL*$dp}
+zeVRZg5eN{k`5Hq;fu5^}tptuf<Hl!;3$RnR_CKW)IJ7mN#~7;yw1V;p^qf6zA<+8&
+z+a)k!HR+MxluV#tOitvuLGg|svk3%G7n=#hB+@3d6()2T6y|Uefg`=`=}<-0<gm>t
+z5Zpg+BoG%tg`{w?VD(HQ(4W&{Am-t1UV-51W<!CU%OT8FL6e=3RWgAB153gy+;6iA
+z1ZOWB39Lwg(XF?s`&SfbLr6~!_r(ch98@%KB4kV{P~rm-f#pnLHbS6W5ZI>_$l?Oa
+zT13#6M&3t(8<jCY1%XW_fkynJ!AFZKr0JuZ$|R7|7xO3w2JV>HQQ-E?1oH4Z6fZDC
+zJB!v8wqSu78ma*4Wm`mm%HPs2Phel}mr6MV%DKSuzSfKgv~Tq+T&)SjyRu~q6tpNb
+zuP9Kg3B+k$jgvI~K1T&AI^qud>is|nEaT;(h(IC@&DE3w2OQU=BQ0>6a$awn3xtGW
+z?S9xJS!osp;+aNHR3OeNYs4@gqv6{Y@`7bVU>k<o=Qq*|r&pEXO9Dqf7?nj3V)$4!
+z6J+8GEWwobstS3<HzH7TPf$>y>jh>4V?lgQMdmG-ig?L9A`q7aFy1R+To9-hf;fOF
+z%z0po+2#-tC?`&-)hyReEC{4QtymXmhM6f{bIMT8Mw^I0rp??R&2?aUNuZhsA*Pe#
+z%#@lq=!)9v1$u|Vk+1~NH~F-?yi657LO*T2kXaC71oJ1J8WxbP|6BDS3fpWL2m26#
+z++-`Fjt6OUT<B?qK5lnC{0-Nq>_}|O|Cjle|J%Rq+pz!u006)sf9qlFDUXzY00000
+o0000000000000000001B7UOYder5u@CIA2c07*qoM6N<$f)n;*3IG5A
+
+literal 0
+HcmV?d00001
+
 diff --git a/launcher/app/src/main/res/drawable/ic_wifi_off.xml b/launcher/app/src/main/res/drawable/ic_wifi_off.xml
 new file mode 100644
 index 0000000..65231c4
