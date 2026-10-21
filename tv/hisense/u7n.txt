@@ -28,6 +28,10 @@ com.android.providers.calendar
 com.android.providers.contacts
 com.google.android.marvin.talkback
 
+# --- Stock YouTube Apps (Replaced by Ad-Free TizenTube / Tube) ---
+com.google.android.youtube.tv
+com.google.android.youtube.tvmusic
+
 # --- Background Lockdown (Starve Background CPU/Data, Do Not Disable) ---
 # Disabling these packages with 'pm disable-user' triggers recovery on Hisense MediaTek,
 # but AppOps background restriction safely silences them without system instability:

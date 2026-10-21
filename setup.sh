@@ -283,6 +283,56 @@ push_buttons_config() {
     echo "Remote buttons successfully deployed & services reloaded on $target."
 }
 
+# -----------------------------------------------------------------------------
+# Companion App Installer (Tube / TizenTube)
+# -----------------------------------------------------------------------------
+install_tizentube_if_needed() {
+    local target="$1"
+    local pkg="io.gh.reisxd.tizentube.cobalt"
+
+    echo -n "Checking if Tube (TizenTube) is installed on TV... "
+    if adb -s "$target" shell "pm path $pkg" 2>/dev/null | grep -q "package:"; then
+        echo "YES (Already installed)"
+        return 0
+    fi
+    echo "NO"
+    echo "Downloading and installing latest TizenTube Cobalt from GitHub..."
+
+    local local_apk="$SCRIPT_DIR/bin/tizentube.apk"
+    if [ ! -f "$local_apk" ]; then
+        local abi
+        abi="$(adb -s "$target" shell getprop ro.product.cpu.abi 2>/dev/null | tr -d '\r\n')"
+        local apk_name="cobalt-arm.apk"
+        if [ "$abi" = "arm64-v8a" ]; then
+            local abilist
+            abilist="$(adb -s "$target" shell getprop ro.product.cpu.abilist 2>/dev/null | tr -d '\r\n')"
+            if [[ "$abilist" == *"arm64-v8a"* ]] && [[ "$abilist" != *"armeabi"* ]]; then
+                apk_name="cobalt-arm64.apk"
+            fi
+        fi
+
+        local download_url
+        download_url="$(curl -s https://api.github.com/repos/reisxd/TizenTubeCobalt/releases/latest 2>/dev/null | grep -E "browser_download_url.*${apk_name}\"" | cut -d '"' -f 4 | head -1 || true)"
+        if [ -z "$download_url" ]; then
+            download_url="https://github.com/reisxd/TizenTubeCobalt/releases/latest/download/$apk_name"
+        fi
+
+        echo "Fetching: $download_url"
+        mkdir -p "$SCRIPT_DIR/bin"
+        if ! curl -L --progress-bar "$download_url" -o "$local_apk"; then
+            echo "Warning: Unable to download TizenTube automatically. Sideloading skipped."
+            rm -f "$local_apk"
+            return 0
+        fi
+    fi
+
+    echo "Deploying Tube (TizenTube) to TV..."
+    adb -s "$target" push "$local_apk" /data/local/tmp/tizentube.apk >/dev/null 2>&1
+    adb -s "$target" shell "pm install -r /data/local/tmp/tizentube.apk; rm -f /data/local/tmp/tizentube.apk" >/dev/null 2>&1
+    adb -s "$target" shell "pm grant $pkg android.permission.RECORD_AUDIO" >/dev/null 2>&1 || true
+    echo "Tube (TizenTube) successfully installed and configured on TV!"
+}
+
 # =============================================================================
 # SUBCOMMAND: BUTTONS
 # =============================================================================
@@ -708,6 +758,11 @@ do_apply() {
     for pkg in "${PROJECTIVY_PACKAGES[@]}"; do
         adb -s "$TARGET" shell "pm uninstall $pkg" >/dev/null 2>&1 || true
     done
+
+    # -----------------------------------------------------------------------------
+    # Ensure Companion Apps (Tube / TizenTube)
+    # -----------------------------------------------------------------------------
+    install_tizentube_if_needed "$TARGET"
 
     # -----------------------------------------------------------------------------
     # Apply Remote Button Mappings
