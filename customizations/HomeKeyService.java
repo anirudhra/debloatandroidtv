@@ -6,7 +6,9 @@ import android.os.SystemClock;
 import android.provider.Settings;
 import android.view.KeyEvent;
 import android.view.accessibility.AccessibilityEvent;
+import android.util.Log;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 
@@ -39,6 +41,7 @@ public class HomeKeyService extends AccessibilityService {
         settingsKeycodes = config.settingsKeycodes;
         settingsPanel = config.settingsKeyPanel;
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
+        Log.i("CYT_KEYS", "HomeKeyService connected. settingsKeycodes=" + Arrays.toString(settingsKeycodes) + ", scancodes=" + Arrays.toString(settingsScancodes));
     }
 
     private boolean isSettingsKey(KeyEvent event) {
@@ -50,8 +53,10 @@ public class HomeKeyService extends AccessibilityService {
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
+        Log.i("CYT_KEYS", "HomeKeyService onKeyEvent: keyCode=" + event.getKeyCode() + ", scanCode=" + event.getScanCode() + ", action=" + event.getAction());
         // The stock launcher handled the remote's Settings button; with it disabled the button does nothing.
         if (isSettingsKey(event)) {
+            Log.i("CYT_KEYS", "HomeKeyService isSettingsKey matched! panel=" + settingsPanel);
             long now = SystemClock.uptimeMillis();
             if (now - lastSettingsTrigger > 400) {
                 lastSettingsTrigger = now;

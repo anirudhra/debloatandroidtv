@@ -722,7 +722,7 @@ do_apply() {
     fi
 
     echo "Starting CleanYourTV Home..."
-    adb -s "$TARGET" shell "am force-stop com.gathin.tvhome && am start -n com.gathin.tvhome/.MainActivity" >/dev/null 2>&1
+    adb -s "$TARGET" shell "am start -n com.gathin.tvhome/.MainActivity" >/dev/null 2>&1
 
     echo ""
     echo "Setup successfully deployed! Running verification..."

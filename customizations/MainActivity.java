@@ -49,6 +49,7 @@ import android.text.Spanned;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -808,6 +809,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         }
         if (match) {
+            Log.i("CYT_KEYS", "MainActivity handleSettingsKey matched! panel=" + settingsKeyPanel);
             long now = SystemClock.uptimeMillis();
             if (now - lastSettingsTrigger > 400) {
                 lastSettingsTrigger = now;
@@ -833,6 +835,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        Log.i("CYT_KEYS", "MainActivity dispatchKeyEvent: keyCode=" + event.getKeyCode() + ", scanCode=" + event.getScanCode() + ", action=" + event.getAction());
         if (handleSettingsKey(event)) return true;
         if (alertInputBanner != null && alertInputBanner.getVisibility() == View.VISIBLE) {
             boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
