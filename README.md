@@ -1,10 +1,12 @@
 # Multi-Device Android TV Debloat & Custom Launcher Framework
 
-A modular, lightweight debloat configuration and setup framework for Android TV / Google TV.
+> [!NOTE]
+> **Built upon and credited to [CleanYourTV](https://github.com/Gathin23/cleanyourtv)**  
+> This project is proudly powered by and built on top of the exceptional work by [Gathin23](https://github.com/Gathin23) and the [CleanYourTV](https://github.com/Gathin23/cleanyourtv) community. All core launcher layouts, focus engines, leanback assets, and Apple TV-inspired design principles originate from CleanYourTV. We extend our full credit, appreciation, and gratitude to [Gathin23](https://github.com/Gathin23) for creating and open-sourcing the premier native Apple TV launcher experience for Android TV.
 
-This repository stores personal customizations, device debloat package lists, automation scripts, and pre-built binaries. It replaces the stock ad-laden Google TV interface with a clean, responsive Apple TV 4K-style native launcher based on [CleanYourTV](https://github.com/Gathin23/cleanyourtv).
+A modular, lightweight debloat automation and remote-mapping framework for Android TV / Google TV, featuring a customized build of **[CleanYourTV](https://github.com/Gathin23/cleanyourtv)**.
 
-Designed to support multiple TV brand models and series (e.g., **Hisense U7N**, **TCL TVs**) by supplying the path to any target debloat list.
+Designed to support multiple TV brand models and series (e.g., **Hisense U7N**, **TCL 65Q6C**, **Walmart Onn 4K**) with zero friction—simply pass the TV model name.
 
 ---
 
@@ -99,11 +101,11 @@ You can view the full command reference and examples directly from your terminal
 
 | Command / Syntax | Purpose |
 |---|---|
-| `./setup.sh <list_path> [tv_ip]` | **Apply Setup:** Debloats TV, configures AdGuard DNS, installs custom launcher, deploys remote buttons, and runs verification. |
-| `./setup.sh buttons [btn_path] [tv_ip]` | **Remote Buttons:** Configures remote buttons (Settings, inputs, app buttons) using a per-TV `.buttons.txt` profile without redebloating. |
-| `./setup.sh discover [tv_ip] [output_file]` | **Audit TV:** Scans installed packages on a TV and generates a categorized debloat candidate list. |
+| `./setup.sh <tv_model> [tv_ip] [btn_profile]` | **Apply Setup:** Debloats TV, configures AdGuard DNS, installs custom launcher, deploys remote buttons, and runs verification. |
+| `./setup.sh buttons <tv_model|btn_profile> [tv_ip]` | **Remote Buttons:** Configures remote buttons (Settings, inputs, app buttons) using a per-TV `.buttons.txt` profile without redebloating. |
+| `./setup.sh discover [tv_ip] [tv_model]` | **Audit TV:** Scans installed packages on a TV and generates a categorized debloat candidate list under `tv/<brand>/<model>.debloat.txt`. |
 | `./setup.sh verify [tv_ip]` | **Health Check:** Verifies Home launcher, DNS ad-blocking, AppOps starvation, remote services, and system RAM. |
-| `./setup.sh` | **Interactive Menu:** Scans `./tv/` for debloat lists and presents an interactive menu. |
+| `./setup.sh` | **Interactive Menu:** Prompts with a numbered TV model selection menu. |
 | `./setup.sh --help` / `-h` | Displays the built-in command reference and examples. |
 
 ---
@@ -119,17 +121,20 @@ You can view the full command reference and examples directly from your terminal
 4. Check your TV's IP address under **Settings** → **Network & Internet**.
 
 ### Step 2: Run Setup
-Run `setup.sh` from your computer, passing the path to the target debloat list and your TV's IP:
+Run `setup.sh` from your computer, passing your TV model name and your TV's IP address:
 
 ```bash
 # For Hisense U7N:
-./setup.sh tv/hisense/u7n.debloat.txt 10.0.10.25
+./setup.sh u7n 10.0.10.25
 
 # For TCL 65Q6C:
-./setup.sh tv/tcl/65q6c.debloat.txt 10.0.10.26
+./setup.sh 65q6c 10.0.10.26
 
 # For Walmart Onn 4K (2023):
-./setup.sh tv/onn/4k_2023.debloat.txt 10.0.10.27
+./setup.sh 4k_2023 10.0.10.27
+
+# Optional: override with a custom button profile
+./setup.sh u7n 10.0.10.25 custom_buttons
 ```
 
 *(Arguments can be supplied in any order. The script automatically applies `tv/common/common.debloat.txt` as a universal base layer, the specified device debloat list, pairs the matching `.buttons.txt` config, takes a pre-flight snapshot in `backup/`, applies background lockdowns, configures AdGuard DNS, installs the custom launcher, grants coarse/fine location for weather, activates `SleepService` for instant standby and the sleep timer, and runs health verification).*
@@ -142,7 +147,7 @@ Once the script finishes:
 
 > [!NOTE]
 > **After System OTA Updates or Factory Reset:**  
-> If an OTA firmware update resets your home screen or re-enables factory bloatware, simply re-enable USB debugging and run `./setup.sh tv/hisense/u7n.debloat.txt <ip>` again. Everything will be restored in seconds.
+> If an OTA firmware update resets your home screen or re-enables factory bloatware, simply re-enable USB debugging and run `./setup.sh u7n <ip>` again. Everything will be restored in seconds.
 
 ---
 
@@ -151,7 +156,7 @@ Once the script finishes:
 When setting up a new TV (like your upcoming TCL TVs), you don't need to guess package names. Use the built-in auditor:
 
 ```bash
-./setup.sh discover 10.0.10.26 tv/tcl/c645.debloat.txt
+./setup.sh discover 10.0.10.26 c645
 ```
 
 * **What it does:**
@@ -208,10 +213,10 @@ SETTINGS_KEYCODES=83
 ```
 
 ### Applying Button Mappings
-* **Automatic on Deploy:** When you run `./setup.sh tv/<brand>/<model>.debloat.txt <ip>`, `setup.sh` automatically checks for a matching `tv/<brand>/<model>.buttons.txt` and deploys it.
+* **Automatic on Deploy:** When you run `./setup.sh <tv_model> <ip>`, `setup.sh` automatically checks for a matching `tv/<brand>/<model>.buttons.txt` and deploys it.
 * **On-Demand Update:** To update remote buttons without re-running the full debloat process:
   ```bash
-  ./setup.sh buttons tv/hisense/u7n.buttons.txt 10.0.10.25
+  ./setup.sh buttons u7n 10.0.10.25
   ```
 
 ---
@@ -277,7 +282,7 @@ cp app/build/outputs/apk/release/app-release.apk ~/code/github/debloatandroidtv/
 ### Deploy to Your TV
 Once built, simply run:
 ```bash
-./setup.sh tv/hisense/u7n.debloat.txt 10.0.10.25
+./setup.sh u7n 10.0.10.25
 ```
 
 ---

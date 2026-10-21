@@ -2,14 +2,15 @@
 # Multi-Device Android TV Setup, Debloat & Verification Kit
 #
 # Usage:
-#   ./setup.sh <debloat_list_path> [tv_ip]     # Apply debloat & custom launcher
-#   ./setup.sh discover [tv_ip] [output_path]  # Scan TV and generate candidate debloat list
-#   ./setup.sh verify [tv_ip]                 # Verify launcher, DNS, and debloat status
+#   ./setup.sh <tv_model> [tv_ip] [buttons_profile]  # Apply debloat & custom launcher
+#   ./setup.sh buttons <tv_model|btn_profile> [tv_ip] # Update remote button mappings
+#   ./setup.sh discover [tv_ip] [tv_model]           # Scan TV and generate candidate debloat list
+#   ./setup.sh verify [tv_ip]                        # Verify launcher, DNS, and debloat status
 #
 # Examples:
-#   ./setup.sh tv/hisense/u7n.debloat.txt 10.0.10.25
-#   ./setup.sh discover 10.0.10.26 tv/tcl/c645.debloat.txt
-#   ./setup.sh verify 10.0.10.25
+#   ./setup.sh u7n 10.0.10.25
+#   ./setup.sh 65q6c 10.0.10.26
+#   ./setup.sh 4k_2023 10.0.10.27
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -24,46 +25,49 @@ Usage:
   ./setup.sh [COMMAND] [ARGUMENTS...]
 
 Commands:
-  apply [list_path] [tv_ip]     (Default) Apply debloat list, configure AdGuard DNS,
-                                install launcher, and configure remote buttons.
-  buttons [btn_path] [tv_ip]    Configure remote buttons (Settings key, inputs, apps)
-                                using a per-TV .buttons.txt configuration file.
-  discover [tv_ip] [out_file]   Connect to a TV, audit all packages, and generate
-                                a candidate debloat list under tv/<brand>/<model>.debloat.txt.
-  verify [tv_ip]                Verify Home launcher status, AdGuard DNS ad-blocking,
-                                disabled bloatware counts, and system RAM health.
+  apply [tv_model] [tv_ip] [btn_profile]  (Default) Apply debloat list, configure AdGuard DNS,
+                                         install launcher, and configure remote buttons.
+  buttons [tv_model|btn_profile] [tv_ip]  Configure remote buttons (Settings key, inputs, apps)
+                                         using a per-TV .buttons.txt configuration file.
+  discover [tv_ip] [tv_model]            Connect to a TV, audit all packages, and generate
+                                         a candidate debloat list under tv/<brand>/<model>.debloat.txt.
+  verify [tv_ip]                         Verify Home launcher status, AdGuard DNS ad-blocking,
+                                         disabled bloatware counts, and system RAM health.
 
 Help:
-  -h, --help, help              Show this help reference.
+  -h, --help, help                       Show this help reference.
 
 Examples:
-  # Deploy Hisense U7N setup (auto-applies tv/common/common.debloat.txt + tv/hisense/u7n.buttons.txt):
-  ./setup.sh tv/hisense/u7n.debloat.txt 10.0.10.25
+  # Deploy Hisense U7N (auto-applies common debloat + tv/hisense/u7n.buttons.txt):
+  ./setup.sh u7n 10.0.10.25
 
-  # Deploy TCL 65Q6C setup:
-  ./setup.sh tv/tcl/65q6c.debloat.txt 10.0.10.26
+  # Deploy TCL 65Q6C:
+  ./setup.sh 65q6c 10.0.10.26
 
-  # Deploy Walmart Onn 4K (2023) setup:
-  ./setup.sh tv/onn/4k_2023.debloat.txt 10.0.10.27
+  # Deploy Walmart Onn 4K (2023):
+  ./setup.sh 4k_2023 10.0.10.27
+
+  # Deploy with a specific custom button profile:
+  ./setup.sh u7n 10.0.10.25 custom_buttons
 
   # Configure or update remote buttons only:
-  ./setup.sh buttons tv/hisense/u7n.buttons.txt 10.0.10.25
+  ./setup.sh buttons u7n 10.0.10.25
   ./setup.sh buttons 10.0.10.25
 
   # Discover & generate debloat list for a new TV:
-  ./setup.sh discover 10.0.10.26 tv/tcl/c645.debloat.txt
+  ./setup.sh discover 10.0.10.26 c645
   ./setup.sh discover 10.0.10.26
 
   # Run post-setup health check:
   ./setup.sh verify 10.0.10.25
 
-  # Interactive mode (prompts with numbered menu from ./tv/):
+  # Interactive mode (prompts with numbered TV menu):
   ./setup.sh
 
 Environment Variables:
-  TV_HOST                       Default target TV IP (default: 10.0.10.25)
-  TV_PORT                       ADB network port (default: 5555)
-  DEBLOAT_LIST                  Path to debloat package list
+  TV_HOST                                Default target TV IP (default: 10.0.10.25)
+  TV_PORT                                ADB network port (default: 5555)
+  DEBLOAT_LIST                           Path to debloat package list
 EOF
 }
 
@@ -90,9 +94,6 @@ fi
 # -----------------------------------------------------------------------------
 # Common Helpers & Arguments
 # -----------------------------------------------------------------------------
-PARAM1="${1:-}"
-PARAM2="${2:-}"
-
 DEBLOAT_LIST="${DEBLOAT_LIST:-}"
 BUTTONS_FILE="${BUTTONS_FILE:-}"
 TV_HOST="${TV_HOST:-10.0.10.25}"
@@ -103,44 +104,115 @@ is_ip() {
     [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "$1" =~ : ]]
 }
 
-is_file_path() {
-    [[ "$1" == *.txt ]] || [ -f "$1" ] || [ -f "$SCRIPT_DIR/$1" ]
+resolve_debloat_file() {
+    local query="$1"
+    [ -z "$query" ] && return 1
+    local clean="${query%.debloat.txt}"
+    clean="${clean%.txt}"
+
+    if [ -f "$query" ]; then
+        echo "$query"
+        return 0
+    elif [ -f "$SCRIPT_DIR/$query" ]; then
+        echo "$SCRIPT_DIR/$query"
+        return 0
+    elif [ -f "$TV_DIR/${clean}.debloat.txt" ]; then
+        echo "$TV_DIR/${clean}.debloat.txt"
+        return 0
+    elif [ -f "$SCRIPT_DIR/${clean}.debloat.txt" ]; then
+        echo "$SCRIPT_DIR/${clean}.debloat.txt"
+        return 0
+    fi
+
+    local basename="${clean##*/}"
+    local matches=()
+    while IFS= read -r f; do
+        [ -n "$f" ] && matches+=("$f")
+    done < <(find "$TV_DIR" -type f -name "${basename}.debloat.txt" ! -path "*/common/*" | sort)
+
+    if [ "${#matches[@]}" -gt 0 ]; then
+        echo "${matches[0]}"
+        return 0
+    fi
+    return 1
+}
+
+resolve_buttons_file() {
+    local query="$1"
+    [ -z "$query" ] && return 1
+    local clean="${query%.buttons.txt}"
+    clean="${clean%.txt}"
+
+    if [ -f "$query" ]; then
+        echo "$query"
+        return 0
+    elif [ -f "$SCRIPT_DIR/$query" ]; then
+        echo "$SCRIPT_DIR/$query"
+        return 0
+    elif [ -f "$TV_DIR/${clean}.buttons.txt" ]; then
+        echo "$TV_DIR/${clean}.buttons.txt"
+        return 0
+    elif [ -f "$SCRIPT_DIR/${clean}.buttons.txt" ]; then
+        echo "$SCRIPT_DIR/${clean}.buttons.txt"
+        return 0
+    fi
+
+    local basename="${clean##*/}"
+    local matches=()
+    while IFS= read -r f; do
+        [ -n "$f" ] && matches+=("$f")
+    done < <(find "$TV_DIR" -type f -name "${basename}.buttons.txt" | sort)
+
+    if [ "${#matches[@]}" -gt 0 ]; then
+        echo "${matches[0]}"
+        return 0
+    fi
+    return 1
 }
 
 if [ "$COMMAND" == "discover" ]; then
-    for p in "$PARAM1" "$PARAM2"; do
-        if [ -n "$p" ]; then
-            if is_ip "$p"; then
-                TV_HOST="$p"
-            else
-                OUTPUT_FILE="$p"
-            fi
+    for p in "$@"; do
+        [ -z "$p" ] && continue
+        if is_ip "$p"; then
+            TV_HOST="$p"
+        else
+            OUTPUT_FILE="$p"
         fi
     done
 elif [ "$COMMAND" == "buttons" ]; then
-    for p in "$PARAM1" "$PARAM2"; do
-        if [ -n "$p" ]; then
-            if is_ip "$p"; then
-                TV_HOST="$p"
+    for p in "$@"; do
+        [ -z "$p" ] && continue
+        if is_ip "$p"; then
+            TV_HOST="$p"
+        elif [ -z "$BUTTONS_FILE" ]; then
+            if resolved="$(resolve_buttons_file "$p")"; then
+                BUTTONS_FILE="$resolved"
             else
                 BUTTONS_FILE="$p"
             fi
         fi
     done
+elif [ "$COMMAND" == "verify" ]; then
+    for p in "$@"; do
+        [ -z "$p" ] && continue
+        if is_ip "$p"; then
+            TV_HOST="$p"
+        fi
+    done
 else
-    for p in "$PARAM1" "$PARAM2"; do
-        if [ -n "$p" ]; then
-            if is_ip "$p"; then
-                TV_HOST="$p"
-            elif is_file_path "$p"; then
-                if [[ "$p" == *.buttons.txt ]]; then
-                    BUTTONS_FILE="$p"
-                else
-                    DEBLOAT_LIST="$p"
-                fi
-            elif [ -z "$DEBLOAT_LIST" ]; then
-                DEBLOAT_LIST="$p"
-            fi
+    # apply command: [tv_model] [tv_ip] [buttons_profile] in any order
+    for p in "$@"; do
+        [ -z "$p" ] && continue
+        if is_ip "$p"; then
+            TV_HOST="$p"
+        elif [ -z "$DEBLOAT_LIST" ] && resolved="$(resolve_debloat_file "$p")"; then
+            DEBLOAT_LIST="$resolved"
+        elif [ -z "$BUTTONS_FILE" ] && resolved="$(resolve_buttons_file "$p")"; then
+            BUTTONS_FILE="$resolved"
+        elif [ -z "$DEBLOAT_LIST" ]; then
+            DEBLOAT_LIST="$p"
+        elif [ -z "$BUTTONS_FILE" ]; then
+            BUTTONS_FILE="$p"
         fi
     done
 fi
@@ -348,34 +420,42 @@ do_buttons() {
 
     if [ -z "$BUTTONS_FILE" ]; then
         AVAILABLE_BTN=()
+        DISPLAY_BTN=()
         if [ -d "$TV_DIR" ]; then
             while IFS= read -r f; do
-                AVAILABLE_BTN+=("${f#$SCRIPT_DIR/}")
+                AVAILABLE_BTN+=("$f")
+                rel="${f#$TV_DIR/}"
+                brand="$(dirname "$rel")"
+                fname="$(basename "$rel" .buttons.txt)"
+                DISPLAY_BTN+=("$fname ($brand)")
             done < <(find "$TV_DIR" -type f -name "*.buttons.txt" | sort)
         fi
 
         if [ -t 0 ] && [ "${#AVAILABLE_BTN[@]}" -gt 1 ]; then
             echo "Select a button configuration file to apply:"
-            select opt in "${AVAILABLE_BTN[@]}"; do
+            select opt in "${DISPLAY_BTN[@]}"; do
                 if [ -n "$opt" ]; then
-                    BUTTONS_FILE="$opt"
+                    idx=$((REPLY - 1))
+                    BUTTONS_FILE="${AVAILABLE_BTN[$idx]}"
                     break
                 fi
             done
         elif [ "${#AVAILABLE_BTN[@]}" -ge 1 ]; then
             BUTTONS_FILE="${AVAILABLE_BTN[0]}"
-            echo "Auto-selected button config: $BUTTONS_FILE"
+            echo "Auto-selected button config: ${BUTTONS_FILE#$SCRIPT_DIR/}"
         else
-            BUTTONS_FILE="tv/hisense/u7n.buttons.txt"
+            BUTTONS_FILE="$TV_DIR/hisense/u7n.buttons.txt"
         fi
     fi
 
-    if [ ! -f "$BUTTONS_FILE" ] && [ -f "$SCRIPT_DIR/$BUTTONS_FILE" ]; then
-        BUTTONS_FILE="$SCRIPT_DIR/$BUTTONS_FILE"
+    if [ ! -f "$BUTTONS_FILE" ]; then
+        if resolved="$(resolve_buttons_file "$BUTTONS_FILE")"; then
+            BUTTONS_FILE="$resolved"
+        fi
     fi
 
     if [ ! -f "$BUTTONS_FILE" ]; then
-        echo "Error: Button configuration file not found at '$BUTTONS_FILE'"
+        echo "Error: Button configuration file not found for '$BUTTONS_FILE'"
         if [ -d "$TV_DIR" ]; then
             echo "Available button configs in ./tv/:"
             find "$TV_DIR" -type f -name "*.buttons.txt" | sed "s|$SCRIPT_DIR/|  - |"
@@ -455,12 +535,15 @@ do_discover() {
     done <<< "$RAW_PACKAGES"
 
     # Default output file if omitted
+    BRAND_CLEAN="$(echo "$BRAND" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]')"
+    MODEL_CLEAN="$(echo "$MODEL" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | tr -cd '[:alnum:]_')"
+    [ -z "$BRAND_CLEAN" ] && BRAND_CLEAN="generic"
+    [ -z "$MODEL_CLEAN" ] && MODEL_CLEAN="model"
+
     if [ -z "$OUTPUT_FILE" ]; then
-        BRAND_CLEAN="$(echo "$BRAND" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]')"
-        MODEL_CLEAN="$(echo "$MODEL" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | tr -cd '[:alnum:]_')"
-        [ -z "$BRAND_CLEAN" ] && BRAND_CLEAN="generic"
-        [ -z "$MODEL_CLEAN" ] && MODEL_CLEAN="model"
         OUTPUT_FILE="$TV_DIR/$BRAND_CLEAN/${MODEL_CLEAN}.debloat.txt"
+    elif [[ "$OUTPUT_FILE" != */* ]] && [[ "$OUTPUT_FILE" != *.debloat.txt ]]; then
+        OUTPUT_FILE="$TV_DIR/$BRAND_CLEAN/${OUTPUT_FILE}.debloat.txt"
     fi
 
     mkdir -p "$(dirname "$OUTPUT_FILE")"
@@ -546,6 +629,9 @@ do_verify() {
     if [ "$DIS_COUNT" -gt 0 ]; then
         echo "PASS"
         echo "       Total bloatware packages disabled: $DIS_COUNT"
+        if adb -s "$TARGET" shell "pm list packages -d" 2>/dev/null | grep -q "com.google.android.youtube.tv"; then
+            echo "       Stock YouTube: Disabled (replaced by Tube)"
+        fi
         PASSED=$((PASSED + 1))
     else
         echo "WARN (No disabled packages detected)"
@@ -620,53 +706,50 @@ do_apply() {
     # -----------------------------------------------------------------------------
     if [ -z "$DEBLOAT_LIST" ]; then
         AVAILABLE_LISTS=()
+        DISPLAY_NAMES=()
         if [ -d "$TV_DIR" ]; then
             while IFS= read -r f; do
-                AVAILABLE_LISTS+=("${f#$SCRIPT_DIR/}")
+                AVAILABLE_LISTS+=("$f")
+                rel="${f#$TV_DIR/}"
+                brand="$(dirname "$rel")"
+                fname="$(basename "$rel" .debloat.txt)"
+                DISPLAY_NAMES+=("$fname ($brand)")
             done < <(find "$TV_DIR" -type f -name "*.debloat.txt" ! -path "*/common/*" | sort)
         fi
 
         if [ -t 0 ] && [ "${#AVAILABLE_LISTS[@]}" -gt 1 ]; then
-            echo "Select a debloat list to apply:"
-            select opt in "${AVAILABLE_LISTS[@]}"; do
+            echo "Select a TV model to apply:"
+            select opt in "${DISPLAY_NAMES[@]}"; do
                 if [ -n "$opt" ]; then
-                    DEBLOAT_LIST="$opt"
+                    idx=$((REPLY - 1))
+                    DEBLOAT_LIST="${AVAILABLE_LISTS[$idx]}"
                     break
                 fi
             done
         elif [ "${#AVAILABLE_LISTS[@]}" -ge 1 ]; then
             DEBLOAT_LIST="${AVAILABLE_LISTS[0]}"
-            echo "Auto-selected debloat list: $DEBLOAT_LIST"
+            echo "Auto-selected debloat list: ${DEBLOAT_LIST#$SCRIPT_DIR/}"
         else
-            DEBLOAT_LIST="tv/hisense/u7n.debloat.txt"
-        fi
-    fi
-
-    # Resolve relative path or aliases if needed
-    if [ ! -f "$DEBLOAT_LIST" ]; then
-        if [ -f "$SCRIPT_DIR/$DEBLOAT_LIST" ]; then
-            DEBLOAT_LIST="$SCRIPT_DIR/$DEBLOAT_LIST"
-        elif [ -f "${DEBLOAT_LIST%.txt}.debloat.txt" ]; then
-            DEBLOAT_LIST="${DEBLOAT_LIST%.txt}.debloat.txt"
-        elif [ -f "$SCRIPT_DIR/${DEBLOAT_LIST%.txt}.debloat.txt" ]; then
-            DEBLOAT_LIST="$SCRIPT_DIR/${DEBLOAT_LIST%.txt}.debloat.txt"
-        elif [ -f "${DEBLOAT_LIST}.debloat.txt" ]; then
-            DEBLOAT_LIST="${DEBLOAT_LIST}.debloat.txt"
-        elif [ -f "$SCRIPT_DIR/${DEBLOAT_LIST}.debloat.txt" ]; then
-            DEBLOAT_LIST="$SCRIPT_DIR/${DEBLOAT_LIST}.debloat.txt"
+            DEBLOAT_LIST="$TV_DIR/hisense/u7n.debloat.txt"
         fi
     fi
 
     if [ ! -f "$DEBLOAT_LIST" ]; then
-        echo "Error: Debloat list not found at '$DEBLOAT_LIST'"
+        if resolved="$(resolve_debloat_file "$DEBLOAT_LIST")"; then
+            DEBLOAT_LIST="$resolved"
+        fi
+    fi
+
+    if [ ! -f "$DEBLOAT_LIST" ]; then
+        echo "Error: Debloat list not found for '$DEBLOAT_LIST'"
         if [ -d "$TV_DIR" ]; then
-            echo "Available lists in ./tv/:"
+            echo "Available TV models in ./tv/:"
             find "$TV_DIR" -type f -name "*.debloat.txt" ! -path "*/common/*" | sed "s|$SCRIPT_DIR/|  - |"
         fi
         exit 1
     fi
 
-    echo "Using debloat list: $DEBLOAT_LIST"
+    echo "Using debloat profile: ${DEBLOAT_LIST#$SCRIPT_DIR/}"
 
     # -----------------------------------------------------------------------------
     # Pre-flight Snapshot (Settings & State)
@@ -690,32 +773,32 @@ do_apply() {
         local target="$2"
         [ -f "$file" ] || return 0
 
-        while IFS= read -r line || [ -n "$line" ]; do
+        while IFS= read -u 9 -r line || [ -n "$line" ]; do
             pkg="$(echo "$line" | sed 's/#.*//' | tr -d '[:space:]')"
             [ -z "$pkg" ] && continue
 
             if [[ "$pkg" == lockdown:* ]]; then
                 # AppOps background execution denial (starvation without disable)
                 local target_pkg="${pkg#lockdown:}"
-                adb -s "$target" shell "cmd appops set $target_pkg RUN_ANY_IN_BACKGROUND ignore" >/dev/null 2>&1 || true
-                adb -s "$target" shell "cmd appops set $target_pkg RUN_IN_BACKGROUND ignore" >/dev/null 2>&1 || true
-                adb -s "$target" shell "am force-stop $target_pkg" >/dev/null 2>&1 || true
+                adb -s "$target" shell "cmd appops set $target_pkg RUN_ANY_IN_BACKGROUND ignore" </dev/null >/dev/null 2>&1 || true
+                adb -s "$target" shell "cmd appops set $target_pkg RUN_IN_BACKGROUND ignore" </dev/null >/dev/null 2>&1 || true
+                adb -s "$target" shell "am force-stop $target_pkg" </dev/null >/dev/null 2>&1 || true
                 STARVED_COUNT=$((STARVED_COUNT + 1))
             else
                 # Standard user disable
-                adb -s "$target" shell "pm disable-user --user 0 $pkg" >/dev/null 2>&1 || true
+                adb -s "$target" shell "pm disable-user --user 0 $pkg" </dev/null >/dev/null 2>&1 || true
                 DISABLED_COUNT=$((DISABLED_COUNT + 1))
             fi
-        done < "$file"
+        done 9< "$file"
     }
 
     COMMON_DEBLOAT="$TV_DIR/common/common.debloat.txt"
     if [ -f "$COMMON_DEBLOAT" ]; then
-        echo "Applying universal Google TV debloat (${COMMON_DEBLOAT#$SCRIPT_DIR/})..."
+        echo "  -> Disabling universal Google TV bloatware (${COMMON_DEBLOAT#$SCRIPT_DIR/})..."
         apply_debloat_file "$COMMON_DEBLOAT" "$TARGET"
     fi
 
-    echo "Applying device debloat (${DEBLOAT_LIST#$SCRIPT_DIR/})..."
+    echo "  -> Disabling device bloatware (${DEBLOAT_LIST#$SCRIPT_DIR/})..."
     apply_debloat_file "$DEBLOAT_LIST" "$TARGET"
 
     echo "Debloat applied: $DISABLED_COUNT packages disabled, $STARVED_COUNT packages starved in background."
@@ -795,13 +878,17 @@ do_apply() {
     # -----------------------------------------------------------------------------
     # Apply Remote Button Mappings
     # -----------------------------------------------------------------------------
-    if [ -n "$BUTTONS_FILE" ] && [ -f "$BUTTONS_FILE" ]; then
-        push_buttons_config "$BUTTONS_FILE" "$TARGET"
+    if [ -n "$BUTTONS_FILE" ]; then
+        if [ ! -f "$BUTTONS_FILE" ]; then
+            if resolved="$(resolve_buttons_file "$BUTTONS_FILE")"; then
+                BUTTONS_FILE="$resolved"
+            fi
+        fi
+        if [ -f "$BUTTONS_FILE" ]; then
+            push_buttons_config "$BUTTONS_FILE" "$TARGET"
+        fi
     else
         CANDIDATE_BTN="${DEBLOAT_LIST%.debloat.txt}.buttons.txt"
-        if [ ! -f "$CANDIDATE_BTN" ]; then
-            CANDIDATE_BTN="${DEBLOAT_LIST%.txt}.buttons.txt"
-        fi
         if [ -f "$CANDIDATE_BTN" ]; then
             push_buttons_config "$CANDIDATE_BTN" "$TARGET"
         fi
