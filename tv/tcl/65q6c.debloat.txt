@@ -1,5 +1,7 @@
-# TCL 65Q6C / T65Q6C QD-Mini LED Google TV (QM6 / C6K Regional Equivalent)
+# TCL 65Q6C / T65Q6C Specific Debloat Package List (QM6 / C6K Regional Equivalent)
 # Target Device: TCL 65Q6C (BeyondTV / Android 12)
+#
+# Note: Universal Google TV bloatware is in tv/common/common.debloat.txt and applied automatically.
 #
 # Safe to disable with:
 #   adb shell pm disable-user --user 0 <package>
@@ -37,20 +39,3 @@ com.tcl.ocean.instructions             # E-manual viewer
 com.tcl.repairguide                    # Repair guide
 com.tcl.browser                        # TCL stock web browser
 com.tcl.smartalexa                     # Alexa integration
-com.google.android.feedback            # Google crash reporter
-com.android.tv.feedbackconsent         # Feedback prompt
-com.google.android.apps.tv.dreamx      # Google promo screensaver
-com.google.android.play.games          # Google Play Games TV
-com.google.android.videos              # Google TV Play Movies & TV
-com.google.android.marvin.talkback     # Accessibility Suite / Switch Access (prevents remote key hijacking)
-
-# --- Stock YouTube Apps (Replaced by Ad-Free TizenTube / Tube) ---
-com.google.android.youtube.tv
-com.google.android.youtube.tvmusic
-
-# --- Google Tracking & Auto-Installers ---
-android.autoinstalls.config.google.gtvpai
-com.google.android.partnersetup
-com.google.android.syncadapters.calendar
-com.android.providers.calendar
-com.android.providers.contacts

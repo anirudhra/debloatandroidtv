@@ -34,12 +34,32 @@ debloatandroidtv/
 │   ├── bools.xml           # Multi-line date enabled
 │   ├── banner_youtube.png  # High-res YouTube leanback banner for Tube
 │   └── ic_wifi_off.xml     # Offline status icon for Wi-Fi pill
-└── tv/                     # Brand & model debloat package lists
+└── tv/                     # Modular multi-device debloat & button configurations
+    ├── common/
+    │   └── common.debloat.txt  # Universal Google TV debloat (applied to all devices)
     ├── hisense/
-    │   └── u7n.txt         # Hisense U7N debloat & background lockdown list
+    │   ├── u7n.debloat.txt     # Hisense U7N OEM bloat & background lockdown list
+    │   └── u7n.buttons.txt     # Hisense remote button mappings (Quick Settings, app keys)
+    ├── onn/
+    │   ├── 4k_2023.debloat.txt # Onn 4K (2023) debloat list & optional streaming apps
+    │   └── 4k_2023.buttons.txt # Onn remote button mappings
     └── tcl/
-        └── model.txt       # TCL debloat list (Samba TV ACR, logkit, promo packages)
+        ├── 65q6c.debloat.txt   # TCL 65Q6C / QM6 debloat list (Samba TV ACR, logkit, promo)
+        └── 65q6c.buttons.txt   # TCL remote button mappings
 ```
+
+---
+
+## Two-Tier Scalable Debloat Architecture
+
+To make debloating scalable across multiple TV brands (Hisense, TCL, Onn, Chromecast, Sony) without duplicating common packages:
+
+1. **Universal Base Layer (`tv/common/common.debloat.txt`):**  
+   Contains bloatware present on almost all modern Android TV / Google TV devices (Google telemetry/tracking, GTV auto-installers, Play Games/Videos, TalkBack/Switch Access conflicts, and stock YouTube/YouTube Music replaced by Tube). This file is automatically applied on every run.
+2. **Device-Specific Layer (`tv/<brand>/<model>.debloat.txt`):**  
+   Contains only manufacturer-specific bloatware, ACR tracking, and retail demo modes (e.g. Hisense `com.vt.*`, TCL `com.tcl.*`, Onn streaming apps).
+3. **Remote Button Profiles (`tv/<brand>/<model>.buttons.txt`):**  
+   Pairs with the target TV model to map remote keys (Settings, input toggles, app keys) to CleanYourTV features or preferred apps.
 
 ---
 
@@ -103,13 +123,16 @@ Run `setup.sh` from your computer, passing the path to the target debloat list a
 
 ```bash
 # For Hisense U7N:
-./setup.sh tv/hisense/u7n.txt 10.0.10.25
+./setup.sh tv/hisense/u7n.debloat.txt 10.0.10.25
 
-# For TCL TV:
-./setup.sh tv/tcl/model.txt 10.0.10.26
+# For TCL 65Q6C:
+./setup.sh tv/tcl/65q6c.debloat.txt 10.0.10.26
+
+# For Walmart Onn 4K (2023):
+./setup.sh tv/onn/4k_2023.debloat.txt 10.0.10.27
 ```
 
-*(Arguments can be supplied in any order. The script automatically takes a pre-flight snapshot in `backup/`, applies the debloat & background lockdowns, configures AdGuard DNS, installs the custom launcher, grants coarse/fine location for weather, automatically activates `SleepService` for instant standby and the sleep timer, and runs health verification).*
+*(Arguments can be supplied in any order. The script automatically applies `tv/common/common.debloat.txt` as a universal base layer, the specified device debloat list, pairs the matching `.buttons.txt` config, takes a pre-flight snapshot in `backup/`, applies background lockdowns, configures AdGuard DNS, installs the custom launcher, grants coarse/fine location for weather, activates `SleepService` for instant standby and the sleep timer, and runs health verification).*
 
 ### Step 3: Secure Your TV
 Once the script finishes:
@@ -119,7 +142,7 @@ Once the script finishes:
 
 > [!NOTE]
 > **After System OTA Updates or Factory Reset:**  
-> If an OTA firmware update resets your home screen or re-enables factory bloatware, simply re-enable USB debugging and run `./setup.sh tv/hisense/u7n.txt <ip>` again. Everything will be restored in seconds.
+> If an OTA firmware update resets your home screen or re-enables factory bloatware, simply re-enable USB debugging and run `./setup.sh tv/hisense/u7n.debloat.txt <ip>` again. Everything will be restored in seconds.
 
 ---
 
@@ -128,7 +151,7 @@ Once the script finishes:
 When setting up a new TV (like your upcoming TCL TVs), you don't need to guess package names. Use the built-in auditor:
 
 ```bash
-./setup.sh discover 10.0.10.26 tv/tcl/c645.txt
+./setup.sh discover 10.0.10.26 tv/tcl/c645.debloat.txt
 ```
 
 * **What it does:**
@@ -185,7 +208,7 @@ SETTINGS_KEYCODES=83
 ```
 
 ### Applying Button Mappings
-* **Automatic on Deploy:** When you run `./setup.sh tv/<brand>/<model>.txt <ip>`, `setup.sh` automatically checks for a matching `tv/<brand>/<model>.buttons.txt` and deploys it.
+* **Automatic on Deploy:** When you run `./setup.sh tv/<brand>/<model>.debloat.txt <ip>`, `setup.sh` automatically checks for a matching `tv/<brand>/<model>.buttons.txt` and deploys it.
 * **On-Demand Update:** To update remote buttons without re-running the full debloat process:
   ```bash
   ./setup.sh buttons tv/hisense/u7n.buttons.txt 10.0.10.25
@@ -254,7 +277,7 @@ cp app/build/outputs/apk/release/app-release.apk ~/code/github/debloatandroidtv/
 ### Deploy to Your TV
 Once built, simply run:
 ```bash
-./setup.sh tv/hisense/u7n.txt 10.0.10.25
+./setup.sh tv/hisense/u7n.debloat.txt 10.0.10.25
 ```
 
 ---

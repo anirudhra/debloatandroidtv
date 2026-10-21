@@ -1,5 +1,7 @@
-# Hisense Android TV Debloat Package List
+# Hisense U7N Specific Debloat Package List
 # Target Device: Hisense SmartTV 4K FFM / hengshan (Android 12)
+#
+# Note: Universal Google TV bloatware is in tv/common/common.debloat.txt and applied automatically.
 #
 # Safe to disable with:
 #   adb shell pm disable-user --user 0 <package>
@@ -17,20 +19,6 @@ com.vt.tv.calmanconnector
 tv.mopa.ginga
 com.vt.tv.interactive
 com.vt.tv.mobiledeviceconnectiontips
-
-# --- Google Tracking, Partner Auto-Installers & Unused Services ---
-android.autoinstalls.config.google.gtvpai
-com.google.android.partnersetup
-com.google.android.feedback
-com.android.printspooler
-com.google.android.syncadapters.calendar
-com.android.providers.calendar
-com.android.providers.contacts
-com.google.android.marvin.talkback
-
-# --- Stock YouTube Apps (Replaced by Ad-Free TizenTube / Tube) ---
-com.google.android.youtube.tv
-com.google.android.youtube.tvmusic
 
 # --- Background Lockdown (Starve Background CPU/Data, Do Not Disable) ---
 # Disabling these packages with 'pm disable-user' triggers recovery on Hisense MediaTek,

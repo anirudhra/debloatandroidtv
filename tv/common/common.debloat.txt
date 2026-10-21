@@ -1,0 +1,29 @@
+# Universal Google TV / Android TV Debloat Package List
+# Target: All Google TV / Android TV devices (Hisense, TCL, Onn, Chromecast, Sony)
+# Applied automatically by setup.sh in addition to device-specific debloat lists.
+#
+# Safe to disable with:
+#   adb shell pm disable-user --user 0 <package>
+
+# --- Google Telemetry, Tracking, Analytics & Auto-Installers ---
+android.autoinstalls.config.google.gtvpai
+com.google.android.partnersetup
+com.google.android.feedback
+com.android.tv.feedbackconsent
+com.android.printspooler
+com.google.android.syncadapters.calendar
+com.android.providers.calendar
+com.android.providers.contacts
+
+# --- Google TV Promos, Games & Store ---
+com.google.android.play.games
+com.google.android.videos
+com.google.android.apps.tv.dreamx
+
+# --- Accessibility Suite (TalkBack & Switch Access) ---
+# Prevents Switch Access from hijacking remote buttons or showing switch setup wizards
+com.google.android.marvin.talkback
+
+# --- Stock YouTube Apps (Replaced by Ad-Free TizenTube / Tube) ---
+com.google.android.youtube.tv
+com.google.android.youtube.tvmusic
