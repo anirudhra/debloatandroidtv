@@ -261,18 +261,24 @@ push_buttons_config() {
     # Reload launcher & accessibility services
     adb -s "$target" shell '
         cur=$(settings get secure enabled_accessibility_services)
+        [ "$cur" = "null" ] && cur=""
+        # Purge any switchaccess/talkback/flar2 that hijack remote buttons
+        cur=$(echo "$cur" | tr ":" "\n" | grep -v "switchaccess" | grep -v "talkback" | grep -v "flar2" | tr "\n" ":" | sed "s/:$//")
+        for svc in com.gathin.tvhome/.HomeKeyService com.gathin.tvhome/.InputKeyService com.gathin.tvhome/.SleepService; do
+            case "$cur" in
+                *"$svc"*) ;;
+                "") cur="$svc" ;;
+                *) cur="$cur:$svc" ;;
+            esac
+        done
         am force-stop com.gathin.tvhome
         am start -n com.gathin.tvhome/.MainActivity >/dev/null 2>&1
-        case "$cur" in
-            *com.gathin.tvhome*)
-                sleep 1
-                settings put secure enabled_accessibility_services ""
-                settings put secure accessibility_enabled 0
-                sleep 1
-                settings put secure enabled_accessibility_services "$cur"
-                settings put secure accessibility_enabled 1
-                ;;
-        esac
+        sleep 1
+        settings put secure enabled_accessibility_services ""
+        settings put secure accessibility_enabled 0
+        sleep 1
+        settings put secure enabled_accessibility_services "$cur"
+        settings put secure accessibility_enabled 1
     ' >/dev/null 2>&1 || true
     echo "Remote buttons successfully deployed & services reloaded on $target."
 }
@@ -665,6 +671,8 @@ do_apply() {
     adb -s "$TARGET" shell '
         cur=$(settings get secure enabled_accessibility_services)
         [ "$cur" = "null" ] && cur=""
+        # Purge any switchaccess/talkback/flar2 that hijack remote buttons
+        cur=$(echo "$cur" | tr ":" "\n" | grep -v "switchaccess" | grep -v "talkback" | grep -v "flar2" | tr "\n" ":" | sed "s/:$//")
         for svc in com.gathin.tvhome/.HomeKeyService com.gathin.tvhome/.InputKeyService com.gathin.tvhome/.SleepService; do
             case "$cur" in
                 *"$svc"*) ;;
@@ -695,6 +703,7 @@ do_apply() {
         "dev.projectivy.blueprint.app"
         "com.danielkorgel.projectivy.plugin.cinemaglow"
         "tv.projectivy.plugin.wallpaperprovider.overflight"
+        "flar2.homebutton"
     )
     for pkg in "${PROJECTIVY_PACKAGES[@]}"; do
         adb -s "$TARGET" shell "pm uninstall $pkg" >/dev/null 2>&1 || true

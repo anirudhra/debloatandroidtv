@@ -168,6 +168,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private int[] settingsKeycodes = new int[0];
     private int[] settingsScancodes = new int[0];
     private boolean settingsKeyPanel;
+    private long lastSettingsTrigger = 0;
     /** Calmer motion for weak GPUs (config.xml, reduced_motion): stiff spring, short fades, no replay. */
     private boolean reducedMotion;
     /** config.xml dock_row: the first row is a separate dock (band, parked low, top shelf) rather than plain grid. */
@@ -795,24 +796,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * nothing even on Home.
      */
     private boolean handleSettingsKey(KeyEvent event) {
-        if (event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS) {
-            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
-                open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
-                        : systemIntent(Settings.ACTION_SETTINGS));
+        boolean match = (event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS);
+        if (!match) {
+            for (int code : settingsKeycodes) {
+                if (event.getKeyCode() == code) { match = true; break; }
             }
-            return true;
         }
-        for (int code : settingsKeycodes) {
-            if (event.getKeyCode() != code) continue;
-            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
-                open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
-                        : systemIntent(Settings.ACTION_SETTINGS));
+        if (!match) {
+            for (int code : settingsScancodes) {
+                if (event.getScanCode() == code) { match = true; break; }
             }
-            return true;
         }
-        for (int code : settingsScancodes) {
-            if (event.getScanCode() != code) continue;
-            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+        if (match) {
+            long now = SystemClock.uptimeMillis();
+            if (now - lastSettingsTrigger > 400) {
+                lastSettingsTrigger = now;
                 open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
                         : systemIntent(Settings.ACTION_SETTINGS));
             }

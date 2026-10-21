@@ -26,6 +26,7 @@ com.android.printspooler
 com.google.android.syncadapters.calendar
 com.android.providers.calendar
 com.android.providers.contacts
+com.google.android.marvin.talkback
 
 # --- Background Lockdown (Starve Background CPU/Data, Do Not Disable) ---
 # Disabling these packages with 'pm disable-user' triggers recovery on Hisense MediaTek,
