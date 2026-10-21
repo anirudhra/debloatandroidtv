@@ -26,7 +26,7 @@ Usage:
   ./setup.sh [OPTIONS]
 
 Options:
-  --tv, -t <model>          Target TV model (e.g. u7n, 65q6c, 4k_2023)
+  --tv, -t <model>          Target TV profile name matching tv/<brand>/<model>.*.txt (e.g. u7n, 65q6c, 4k_2023)
   --ip, -i <ip_address>     Target TV IP address (default: 10.0.10.25)
   --buttons, -b             Configure remote buttons only (no debloat / launcher install)
   --discover, -d [model]    Audit TV and generate candidate debloat list under tv/<brand>/<model>.debloat.txt
@@ -263,6 +263,7 @@ parse_buttons_file() {
     local file="$1"
     local panel="true"
     local temp_unit="celsius"
+    local columns=5
     local -a settings_keycodes=()
     local -a settings_scancodes=()
     local -a input_keycodes=()
@@ -315,6 +316,9 @@ parse_buttons_file() {
             temperature_unit|temp_unit|weather_unit)
                 temp_unit="$val"
                 ;;
+            columns|grid_columns|icons_per_row)
+                columns="$val"
+                ;;
         esac
     done < "$file"
 
@@ -335,7 +339,8 @@ parse_buttons_file() {
   "settings_key_scancodes": $ss_json,
   "input_key_keycodes": $ik_json,
   "app_keys": $ak_json,
-  "temperature_unit": "$temp_unit"
+  "temperature_unit": "$temp_unit",
+  "columns": $columns
 }
 EOF
 }

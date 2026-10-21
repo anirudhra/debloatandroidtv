@@ -7,10 +7,12 @@
 #   SETTINGS_SCANCODES=              # Linux scancodes for Settings (optional)
 #   INPUT_KEYCODES=                  # Android keycodes that open Input switcher (optional)
 #   TEMPERATURE_UNIT=celsius|fahrenheit # Primary unit for weather display (secondary in brackets)
+#   COLUMNS=4|5|6|7                  # Grid icons per row (default: 5)
 #   APP_KEYS=KEYCODE:PACKAGE         # Dedicated app buttons (e.g. 190:io.gh.reisxd.tizentube.cobalt)
 
 SETTINGS_PANEL=true
 SETTINGS_KEYCODES=83
+COLUMNS=5
 
 # --- Active App Button Mappings ---
 # YouTube button (TCL remote standard keyCode 190) -> TizenTube

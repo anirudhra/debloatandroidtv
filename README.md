@@ -31,7 +31,7 @@ debloatandroidtv/
 │   ├── activity_main.xml   # Weather layout, HDMI alert banner & status bar
 │   ├── sleep_service.xml   # Accessibility service configuration
 │   ├── AndroidManifest.xml # Permissions (Internet, Kill processes) & service declarations
-│   ├── config.xml          # Tube rename, YouTube banner, 4 dock apps, weather config
+│   ├── config.xml          # Tube rename, YouTube banner, 5 dock apps, 5 columns, weather config
 │   ├── strings.xml         # 2-row date format, Control Center & move mode strings
 │   ├── bools.xml           # Multi-line date enabled
 │   ├── banner_youtube.png  # High-res YouTube leanback banner for Tube
@@ -83,10 +83,11 @@ To make debloating scalable across multiple TV brands (Hisense, TCL, Onn, Chrome
 * **OLED / Mini-LED Pixel Drift:** Microscopic 1.5dp subpixel drift every minute across static clock and status elements to prevent static image retention and burn-in on premium OLED and Mini-LED panels.
 * **Full-Grid Dynamic Ambient Glow:** Samples dominant colors from every app's artwork and casts a smooth ambient glow as you scroll through the entire grid, not just the dock row.
 * **Custom App Branding:** TizenTube is prominently titled **Tube** and uses the official YouTube Leanback icon (persists across TizenTube updates).
-* **Pinned Dock:** Dedicated bottom dock containing Tube, Apple TV, Amazon Prime Video, and LocalNow.
+* **5 Icons Per Row by Default:** The app grid and dock default to 5 columns for a balanced, spacious leanback layout.
+* **Pinned Dock:** Dedicated bottom dock containing 5 slots: Tube, Apple TV, Amazon Prime Video, Jellyfin, and LocalNow.
 * **Refined Status Bar:**
   * Clean thin clock (Outfit font) with greeting text removed.
-  * Date formatted cleanly into 2 rows (Row 1: Day of week, Row 2: Date & Month).
+  * Date formatted cleanly into 2 rows (Row 1: Date, Month & Year; Row 2: Day of week).
   * Status pills: `Inputs` (with icon and text), `Wi-Fi` (icon-only circular pill with offline detection), and `Settings` (icon-only circular pill).
 
 ---
@@ -107,6 +108,16 @@ You can view the full command reference and examples directly from your terminal
 | `./setup.sh --verify [--ip <address>]` | **Health Check:** Verifies Home launcher, DNS ad-blocking, AppOps starvation, remote services, and system RAM. |
 | `./setup.sh` | **Interactive Menu:** Prompts with a numbered TV model selection menu. |
 | `./setup.sh --help` / `-h` | Displays the built-in command reference and examples. |
+
+> [!IMPORTANT]
+> **Understanding the `--tv <model>` Argument:**  
+> The `<model>` argument specifies the TV device profile and **must match the model name in the files under `tv/<brand>/<model>.*.txt`**.
+> You do **not** need to type directory paths or file extensions—`setup.sh` automatically searches all brand folders under `tv/` to locate the matching `.debloat.txt` and `.buttons.txt` profile files:
+> * `--tv u7n` $\rightarrow$ matches [`tv/hisense/u7n.debloat.txt`](tv/hisense/u7n.debloat.txt) and [`tv/hisense/u7n.buttons.txt`](tv/hisense/u7n.buttons.txt)
+> * `--tv 65q6c` $\rightarrow$ matches [`tv/tcl/65q6c.debloat.txt`](tv/tcl/65q6c.debloat.txt) and [`tv/tcl/65q6c.buttons.txt`](tv/tcl/65q6c.buttons.txt)
+> * `--tv 4k_2023` $\rightarrow$ matches [`tv/onn/4k_2023.debloat.txt`](tv/onn/4k_2023.debloat.txt) and [`tv/onn/4k_2023.buttons.txt`](tv/onn/4k_2023.buttons.txt)
+>
+> To support any new TV model, simply create `tv/<brand>/<model>.debloat.txt` (and optional `tv/<brand>/<model>.buttons.txt`), then pass `--tv <model>`.
 
 ---
 

@@ -1414,10 +1414,10 @@ index e83b7f9..6293ad9 100644
 +    <bool name="date_single_line">false</bool>
  </resources>
 diff --git a/launcher/app/src/main/res/values/config.xml b/launcher/app/src/main/res/values/config.xml
-index 3deebbe..dd05949 100644
+index 3deebbe..de9d213 100644
 --- a/launcher/app/src/main/res/values/config.xml
 +++ b/launcher/app/src/main/res/values/config.xml
-@@ -9,24 +9,28 @@
+@@ -9,24 +9,29 @@
  
      <!-- Apps pinned to the dock row at the bottom, in this order. Missing apps are skipped. -->
      <string-array name="dock_apps">
@@ -1427,6 +1427,7 @@ index 3deebbe..dd05949 100644
          <item>com.amazon.amazonvideo.livingroom</item>
 -        <item>com.google.android.youtube.tv</item>
 -        <item>in.startv.hotstar</item>
++        <item>org.jellyfin.androidtv</item>
 +        <item>com.weathergroup.localnow</item>
      </string-array>
      <!-- With fewer dock_apps than columns (or a dock app that is not installed), the free dock slots take
@@ -1450,7 +1451,7 @@ index 3deebbe..dd05949 100644
  
      <!-- Some TVs give their Live TV app no leanback entry point at all, so `live_tv_package` above
           resolves to nothing (TCL Android TV 9 on China-market sets is one). This action is then sent
-@@ -41,10 +45,12 @@
+@@ -41,10 +46,12 @@
  
      <!-- A tile's name instead of the app's own: "package=Name". It also shows above the dock. -->
      <string-array name="app_labels">
@@ -1463,7 +1464,7 @@ index 3deebbe..dd05949 100644
      </string-array>
  
      <!-- TVs with no TvInputManager have no HDMI list to read, but their own source-selection panel
-@@ -71,11 +77,14 @@
+@@ -71,11 +78,14 @@
           settings panel) on scancode 240 (KEY_UNKNOWN), the scancode several TCL buttons share. Find the keycode
           with `tools/tv.py 'logcat -v time -s InputReader:D'` while pressing the button. Leave empty to omit. -->
      <integer-array name="settings_key_keycodes">
@@ -1479,8 +1480,19 @@ index 3deebbe..dd05949 100644
  
      <!-- More remote buttons that open the input switcher, by Android keycode (INPUT_KEY_SERVICE=1
           build-and-install.sh; KEYCODE_TV always does). For buttons only a disabled app answered: the Xiaomi
+@@ -120,8 +130,8 @@
+     <bool name="dock_title">true</bool>
+ 
+     <!-- Tiles per row in the grid; the dock always has this many slots. Tiles are 180dp wide at 4 columns and
+-         shrink to fit from 5 up (about 144dp at 5, 117dp at 6 on a 1080p TV). -->
+-    <integer name="columns">4</integer>
++         shrink to fit from 5 up (about 144dp at 5, 117dp at 6 on a 1080p TV). Default is 5. -->
++    <integer name="columns">5</integer>
+ 
+     <!-- Basic motion is on; advanced effects are opt-in in the launcher's own Settings screen. -->
+     <bool name="animations">true</bool>
 diff --git a/launcher/app/src/main/res/values/strings.xml b/launcher/app/src/main/res/values/strings.xml
-index 58d2338..dadcf50 100644
+index 58d2338..50db416 100644
 --- a/launcher/app/src/main/res/values/strings.xml
 +++ b/launcher/app/src/main/res/values/strings.xml
 @@ -18,7 +18,7 @@
@@ -1488,7 +1500,7 @@ index 58d2338..dadcf50 100644
      <string name="not_available">Not available on this TV</string>
      <string name="cant_open">Can\'t open %1$s</string>
 -    <string name="date_format">EEEE  d MMMM</string>
-+    <string name="date_format">EEEE\nd MMMM yyyy</string>
++    <string name="date_format">d MMMM yyyy\nEEEE</string>
      <!-- Date next to the clock on Home; a locale can split it over two lines with \n. -->
      <string name="date_format_home" translatable="false">@string/date_format</string>
      <string name="stats_cpu">CPU %1$d%%</string>
