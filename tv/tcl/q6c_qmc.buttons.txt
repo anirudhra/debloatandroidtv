@@ -1,5 +1,5 @@
 # Remote Button Configuration
-# Target Device: TCL 65Q6C / T65Q6C (RC902V / RC933 Bluetooth Remote)
+# Target Device: TCL Q6C / QMC / QM6 (RC902V / RC933 Bluetooth Remote)
 #
 # Syntax:
 #   SETTINGS_PANEL=true|false        # Open Quick Settings glass panel (true) or full Android settings (false)

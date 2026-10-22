@@ -1,5 +1,5 @@
-# TCL 65Q6C / T65Q6C Specific Debloat Package List (QM6 / C6K Regional Equivalent)
-# Target Device: TCL 65Q6C (BeyondTV / Android 12)
+# TCL Q6C / QMC / QM6 Specific Debloat Package List (QM6 / C6K Regional Equivalent)
+# Target Device: TCL Q6C / QMC (BeyondTV / Android 12)
 #
 # Note: Universal Google TV bloatware is in tv/common/common.debloat.txt and applied automatically.
 #

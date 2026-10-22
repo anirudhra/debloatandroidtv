@@ -6,7 +6,7 @@
 
 A modular, lightweight debloat automation and remote-mapping framework for Android TV / Google TV, featuring a customized build of **[CleanYourTV](https://github.com/Gathin23/cleanyourtv)**.
 
-Designed to support multiple TV brand models and series (e.g., **Hisense U7N**, **TCL 65Q6C**, **Walmart Onn 4K**) with zero friction—simply pass the TV model name.
+Designed to support multiple TV brand models and series (e.g., **Hisense U7N**, **TCL Q6C / QMC**, **Walmart Onn 4K**) with zero friction—simply pass the TV model name.
 
 ---
 
@@ -52,8 +52,8 @@ debloatandroidtv/
     │   ├── 4k_2023.debloat.txt # Onn 4K (2023) debloat list & optional streaming apps
     │   └── 4k_2023.buttons.txt # Onn remote button mappings
     └── tcl/
-        ├── 65q6c.debloat.txt   # TCL 65Q6C / QM6 debloat list (Samba TV ACR, logkit, promo)
-        └── 65q6c.buttons.txt   # TCL remote button mappings
+        ├── q6c_qmc.debloat.txt # TCL Q6C / QMC / QM6 debloat list (Samba TV ACR, logkit, promo)
+        └── q6c_qmc.buttons.txt # TCL remote button mappings
 ```
 
 ---
@@ -122,7 +122,7 @@ You can view the full command reference and examples directly from your terminal
 > The `<model>` argument specifies the TV device profile and **must match the model name in the files under `tv/<brand>/<model>.*.txt`**.
 > You do **not** need to type directory paths or file extensions—`setup.sh` automatically searches all brand folders under `tv/` to locate the matching `.debloat.txt` and `.buttons.txt` profile files:
 > * `--tv u7n` $\rightarrow$ matches [`tv/hisense/u7n.debloat.txt`](tv/hisense/u7n.debloat.txt) and [`tv/hisense/u7n.buttons.txt`](tv/hisense/u7n.buttons.txt)
-> * `--tv 65q6c` $\rightarrow$ matches [`tv/tcl/65q6c.debloat.txt`](tv/tcl/65q6c.debloat.txt) and [`tv/tcl/65q6c.buttons.txt`](tv/tcl/65q6c.buttons.txt)
+> * `--tv q6c_qmc` $\rightarrow$ matches [`tv/tcl/q6c_qmc.debloat.txt`](tv/tcl/q6c_qmc.debloat.txt) and [`tv/tcl/q6c_qmc.buttons.txt`](tv/tcl/q6c_qmc.buttons.txt)
 > * `--tv 4k_2023` $\rightarrow$ matches [`tv/onn/4k_2023.debloat.txt`](tv/onn/4k_2023.debloat.txt) and [`tv/onn/4k_2023.buttons.txt`](tv/onn/4k_2023.buttons.txt)
 >
 > To support any new TV model, simply create `tv/<brand>/<model>.debloat.txt` (and optional `tv/<brand>/<model>.buttons.txt`), then pass `--tv <model>`.
@@ -146,8 +146,8 @@ Run `setup.sh` from your computer with `--tv <model>` and `--ip <address>`:
 # For Hisense U7N:
 ./setup.sh --tv u7n --ip 10.0.10.25
 
-# For TCL 65Q6C:
-./setup.sh --tv 65q6c --ip 10.0.10.26
+# For TCL Q6C / QMC:
+./setup.sh --tv q6c_qmc --ip 10.0.10.26
 
 # For Walmart Onn 4K (2023):
 ./setup.sh --tv 4k_2023 --ip 10.0.10.27
