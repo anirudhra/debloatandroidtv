@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **Built upon and credited to [CleanYourTV](https://github.com/Gathin23/cleanyourtv)**  
-> This project is proudly powered by and built on top of the exceptional work by [Gathin23](https://github.com/Gathin23) and the [CleanYourTV](https://github.com/Gathin23/cleanyourtv) community. All core launcher layouts, focus engines, leanback assets, and Apple TV-inspired design principles originate from CleanYourTV. We extend our full credit, appreciation, and gratitude to [Gathin23](https://github.com/Gathin23) for creating and open-sourcing the premier native Apple TV launcher experience for Android TV.
+> This project is proudly powered by and built on top of the exceptional work by [Gathin23](https://github.com/Gathin23) and the [CleanYourTV](https://github.com/Gathin23/cleanyourtv) community. All core launcher layouts, focus engines, leanback assets, and Apple TV-inspired design principles originate from CleanYourTV.
 
 A modular, lightweight debloat automation and remote-mapping framework for Android TV / Google TV, featuring a customized build of **[CleanYourTV](https://github.com/Gathin23/cleanyourtv)**.
 
