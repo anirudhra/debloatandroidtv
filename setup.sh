@@ -9,7 +9,7 @@
 #
 # Examples:
 #   ./setup.sh --tv u7n --ip 10.0.10.25
-#   ./setup.sh --tv q6c_qmc --ip 10.0.10.26
+#   ./setup.sh --tv q6c_qm6 --ip 10.0.10.26
 #   ./setup.sh --tv 4k_2023 --ip 10.0.10.27
 #   ./setup.sh --buttons --tv u7n
 set -euo pipefail
@@ -26,7 +26,7 @@ Usage:
   ./setup.sh [OPTIONS]
 
 Options:
-  --tv, -t <model>          Target TV profile name matching tv/<brand>/<model>.*.txt (e.g. u7n, q6c_qmc, 4k_2023)
+  --tv, -t <model>          Target TV profile name matching tv/<brand>/<model>.*.txt (e.g. u7n, q6c_qm6, 4k_2023)
   --ip, -i <ip_address>     Target TV IP address (default: 10.0.10.25)
   --buttons, -b             Configure remote buttons only (no debloat / launcher install)
   --discover, -d [model]    Audit TV and generate candidate debloat list under tv/<brand>/<model>.debloat.txt
@@ -38,8 +38,8 @@ Examples:
   ./setup.sh --tv u7n --ip 10.0.10.25
   ./setup.sh --tv u7n
 
-  # Deploy full setup to TCL Q6C / QMC:
-  ./setup.sh --tv q6c_qmc --ip 10.0.10.26
+  # Deploy full setup to TCL Q6C / QM6:
+  ./setup.sh --tv q6c_qm6 --ip 10.0.10.26
 
   # Deploy full setup to Walmart Onn 4K (2023):
   ./setup.sh --tv 4k_2023 --ip 10.0.10.27
