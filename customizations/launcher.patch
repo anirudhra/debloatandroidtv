@@ -181,7 +181,7 @@ index 3fd973d5..1ce7cb42 100644
              }
              return true;
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
-index 5be43c94..e72acbce 100644
+index 5be43c94..dd31e158 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 @@ -3,6 +3,7 @@ package com.gathin.tvhome;
@@ -263,7 +263,15 @@ index 5be43c94..e72acbce 100644
          settingsKeyPanel = cfg.settingsKeyPanel;
          COLUMNS = cfg.columns;
          animations = cfg.animations;
-@@ -634,10 +664,25 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -410,6 +440,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+         // still follows the dock.
+         if (!cfg.dockTitle) hero.setVisibility(View.GONE);
+         greeting = findViewById(R.id.greeting);
++        greeting.setVisibility(View.GONE);
+         clockBlock = findViewById(R.id.leftBlock);
+         greetingColor = greeting.getCurrentTextColor();
+         if (getResources().getBoolean(R.bool.rtl_menu_bar)) {
+@@ -634,10 +665,25 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          }
          if (cfg.iconOnlyInputs) makeIconOnly((TextView) btnInputs);
          btnSettings.setOnLongClickListener(v -> {
@@ -290,7 +298,7 @@ index 5be43c94..e72acbce 100644
          // Keep focus on the top bar at its ends and at the top: Android's focus finder would otherwise
          // jump to a tile far below when there is nothing in that direction.
          boolean rtlMenuBar = getResources().getBoolean(R.bool.rtl_menu_bar);
-@@ -792,6 +837,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -792,6 +838,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onResume() {
          super.onResume();
@@ -298,7 +306,7 @@ index 5be43c94..e72acbce 100644
          // A festival that started or ended while Home was in the background: rebuild with or without it.
          if (festive != festival.active(LocalDate.now())) {
              recreate();
-@@ -837,6 +883,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -837,6 +884,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          if (showStats) startStats();
          sky.update();
          wallpaperPlayer.start();
@@ -307,7 +315,7 @@ index 5be43c94..e72acbce 100644
          handler.postDelayed(minuteTick, MINUTE_MS);
          if (festive && diya != null) {
              diya.start();
-@@ -1003,6 +1051,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1003,6 +1052,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onPause() {
          super.onPause();
@@ -316,7 +324,7 @@ index 5be43c94..e72acbce 100644
          root.removeCallbacks(showIdleClock);
          endReorder();   // Home or another app while reordering keeps the order so far
          wallpaperPlayer.stop();
-@@ -1092,6 +1142,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1092,6 +1143,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              }
              return true;
          }
@@ -331,7 +339,7 @@ index 5be43c94..e72acbce 100644
          return false;
      }
  
-@@ -1109,6 +1167,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1109,6 +1168,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
       */
      @Override
      public boolean dispatchKeyEvent(KeyEvent event) {
@@ -352,7 +360,7 @@ index 5be43c94..e72acbce 100644
          if (handleSettingsKey(event)) return true;
          if (tileMenuEnabled && !reordering && openPopup == null && cardPrompt == null
                  && event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
-@@ -2876,6 +2948,212 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2876,6 +2949,212 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          rows.getChildAt(0).requestFocus();
      }
  
@@ -565,7 +573,7 @@ index 5be43c94..e72acbce 100644
      /** The header opens launcher settings directly; hold OK keeps the extra home actions available. */
      private void showSettingsMenu() {
          View anchor = findViewById(R.id.btnSettings);
-@@ -2929,6 +3207,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2929,6 +3208,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          });
          addSettingsMenuRow(rows, popup, R.string.library_app_info, () -> open(new Intent(
                  Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg))));
@@ -1039,10 +1047,20 @@ index 00000000..65231c42
 +        android:pathData="M23.64,7c-0.45,-0.34 -4.93,-4 -11.64,-4c-1.5,0 -2.8,0.19 -3.95,0.47L10.74,6.16C11.32,6.05 11.95,6 12,6c5.25,0 9.01,2.8 9.4,3.11L23.64,7zM3.41,1.86L2,3.27l2.08,2.08C2.56,6.23 1.46,7.21 1.36,7.29L12,20.54l3.52,-4.37 5.07,5.07 1.41,-1.41L3.41,1.86zM12,17.27l-5.35,-6.65c0.97,-0.74 2.87,-1.82 5.35,-1.82 0.35,0 0.69,0.03 1.02,0.07l-2.02,2.02c-0.33,0.39 -0.5,0.88 -0.5,1.38 0,0.5 0.17,0.99 0.5,1.38L12,17.27z" />
 +</vector>
 diff --git a/launcher/app/src/main/res/layout/activity_main.xml b/launcher/app/src/main/res/layout/activity_main.xml
-index c5d56e73..7d748a31 100644
+index c5d56e73..e7b755f6 100644
 --- a/launcher/app/src/main/res/layout/activity_main.xml
 +++ b/launcher/app/src/main/res/layout/activity_main.xml
-@@ -224,7 +224,7 @@
+@@ -187,7 +187,8 @@
+                     android:textSize="12sp"
+                     android:fontFamily="@string/font_medium"
+                     android:letterSpacing="0.22"
+-                    android:textAllCaps="true" />
++                    android:textAllCaps="true"
++                    android:visibility="gone" />
+ 
+                 <LinearLayout
+                     android:layout_width="match_parent"
+@@ -224,7 +225,7 @@
  
                      <View
                          android:layout_width="1dp"
@@ -1051,7 +1069,7 @@ index c5d56e73..7d748a31 100644
                          android:layout_gravity="bottom"
                          android:layout_marginStart="16dp"
                          android:layout_marginEnd="16dp"
-@@ -239,6 +239,22 @@
+@@ -239,6 +240,22 @@
                          android:layout_marginBottom="9dp"
                          android:orientation="vertical">
  
@@ -1074,7 +1092,7 @@ index c5d56e73..7d748a31 100644
                          <!-- Shamsi date ("27 Mehr 1405"), shown when shamsi_date is on. -->
                          <TextView
                              android:id="@+id/shamsiDate"
-@@ -344,6 +360,55 @@
+@@ -344,6 +361,55 @@
                      android:drawableStart="@drawable/ic_settings"
                      android:nextFocusDown="@+id/grid" />
              </LinearLayout>

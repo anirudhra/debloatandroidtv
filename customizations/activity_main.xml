@@ -187,7 +187,8 @@
                     android:textSize="12sp"
                     android:fontFamily="@string/font_medium"
                     android:letterSpacing="0.22"
-                    android:textAllCaps="true" />
+                    android:textAllCaps="true"
+                    android:visibility="gone" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
