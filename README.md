@@ -36,6 +36,12 @@ debloatandroidtv/
 │   ├── bools.xml           # Multi-line date enabled
 │   ├── banner_youtube.png  # High-res YouTube leanback banner for TizenTube
 │   └── ic_wifi_off.xml     # Offline status icon for Wi-Fi pill
+├── tools/                  # Upstream CleanYourTV diagnostic and auditing utilities
+│   ├── check.py            # Post-OTA drift detection & automatic repair (--fix)
+│   ├── privacy.py          # Evidence-based voice, ACR, and telemetry scanner
+│   ├── recovery.py         # Device state recovery record generator
+│   ├── adb-closed.py       # Port 5555 closed verification after setup
+│   └── tv.py               # Minimal Python ADB TCP client (runs without adb binary)
 └── tv/                     # Modular multi-device debloat & button configurations
     ├── common/
     │   └── common.debloat.txt  # Universal Google TV debloat (applied to all devices)
@@ -71,6 +77,8 @@ To make debloating scalable across multiple TV brands (Hisense, TCL, Onn, Chrome
   * **Move app:** Use D-pad to move the tile anywhere across dock and grid, press OK to drop. Custom order is saved locally and persists across reboots.
   * **App info:** Direct access to Android system application settings.
   * **Reset app order:** Reverts ordering back to the default configuration.
+* **Instant 60fps Home Return (`TileRefresh`):** Replaces full grid recycles with package signature caching. When returning from streaming apps or video playback, the launcher displays instantly without stutter or frame drops.
+* **Self-Healing Accessibility Services (`ServiceRepair`):** Automatically recovers `HomeKeyService`, `SleepService`, and remote key listeners if Android's low-memory killer or aggressive OEM battery management drops them.
 * **Apple TV-Style Control Center:** Hold OK on the **Settings** pill to open a sleek glass overlay:
   * **Sleep timer:** Cycle through 30 / 60 / 90 min with live remaining countdown.
   * **Turn off now:** Puts the TV into instant standby via `SleepService` accessibility integration.
@@ -152,10 +160,26 @@ Once the script finishes:
 1. Go back to **Developer options** on your TV.
 2. Turn **USB debugging** back to **OFF**.
 3. Reboot the TV. (This closes port 5555 and ensures your TV is completely secure).
+4. *(Optional)* Verify port 5555 is closed from your terminal:
+   ```bash
+   python3 tools/adb-closed.py 10.0.10.25
+   ```
+
+> [!NOTE]
+> **Wi-Fi Credential Safety Guard:**  
+> If your TV was originally set up using the Google TV setup wizard, the Wi-Fi credentials are owned by `com.google.android.tungsten.setupwraith`. `setup.sh` dynamically inspects `dumpsys wifi` and will automatically **skip** disabling `setupwraith` if it owns your active Wi-Fi profile, preventing accidental Wi-Fi credential deletion and lost network connectivity.
 
 > [!NOTE]
 > **After System OTA Updates or Factory Reset:**  
-> If an OTA firmware update resets your home screen or re-enables factory bloatware, simply re-enable USB debugging and run `./setup.sh --tv u7n` again. Everything will be restored in seconds.
+> If an OTA firmware update resets your home screen or re-enables factory bloatware, you can quickly audit and repair without running full setup:
+> ```bash
+> # Check what the OTA update re-enabled:
+> python3 tools/check.py tv/hisense/u7n.debloat.txt com.gathin.tvhome
+> 
+> # Automatically fix drift and restore CleanYourTV as default Home:
+> python3 tools/check.py --fix tv/hisense/u7n.debloat.txt com.gathin.tvhome
+> ```
+> Alternatively, re-enable USB debugging and run `./setup.sh --tv u7n` again. Everything will be restored in seconds.
 
 ---
 
@@ -247,7 +271,39 @@ lockdown:com.vt.tv.ai_sense
 
 ---
 
-## Workflow 4: Clone Upstream, Merge Customizations, Build & Deploy
+## Workflow 5: Diagnostic, Privacy & Post-OTA Tools (`tools/`)
+
+Standalone Python auditing and maintenance tools pulled from upstream CleanYourTV:
+
+### 1. Firmware Update Drift Check & Auto-Fix (`check.py`)
+After a TV firmware update, the manufacturer often re-enables factory packages and resets the default launcher. `check.py` checks for drift against your debloat list and can automatically fix it without disturbing your recovery state:
+```bash
+# Check if firmware update reverted changes (exits 1 on drift):
+python3 tools/check.py tv/hisense/u7n.debloat.txt com.gathin.tvhome
+
+# Re-disable restored packages and restore CleanYourTV as default Home:
+python3 tools/check.py --fix tv/hisense/u7n.debloat.txt com.gathin.tvhome
+```
+
+### 2. Evidence-Based Privacy & Voice Auditor (`privacy.py`)
+Inspects active voice listeners, Automatic Content Recognition (ACR) agents, and telemetry services running on your TV using AppOps record verification rather than coarse package permissions:
+```bash
+# Audit voice, ACR and telemetry services:
+python3 tools/privacy.py
+
+# Export verified tracking candidates to a custom debloat list:
+python3 tools/privacy.py --write tv/hisense/privacy_candidates.txt
+```
+
+### 3. Port Security Verification (`adb-closed.py`)
+Verifies that network ADB (port 5555) is completely closed after toggling off USB debugging:
+```bash
+python3 tools/adb-closed.py 10.0.10.25
+```
+
+---
+
+## Workflow 6: Clone Upstream, Merge Customizations, Build & Deploy
 
 If you want to pull updates from upstream [CleanYourTV](https://github.com/Gathin23/cleanyourtv), recompile the launcher, or make further modifications, you have two flexible methods:
 

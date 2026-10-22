@@ -808,6 +808,16 @@ do_apply() {
             pkg="$(echo "$line" | sed 's/#.*//' | tr -d '[:space:]')"
             [ -z "$pkg" ] && continue
 
+            if [[ "$pkg" == "com.google.android.tungsten.setupwraith" ]]; then
+                # Safety check: if setupwraith owns the active Wi-Fi network, disabling it deletes the network!
+                local wifi_owners
+                wifi_owners="$(adb -s "$target" shell "dumpsys wifi" 2>/dev/null | grep -o 'cname=[^ ]*' || true)"
+                if echo "$wifi_owners" | grep -q "setupwraith"; then
+                    echo "  [SAFETY GUARD] Skipping $pkg: saved Wi-Fi network belongs to it."
+                    continue
+                fi
+            fi
+
             if [[ "$pkg" == lockdown:* ]]; then
                 # AppOps background execution denial (starvation without disable)
                 local target_pkg="${pkg#lockdown:}"
@@ -883,7 +893,14 @@ do_apply() {
     # -----------------------------------------------------------------------------
     echo "[5/6] Setting CleanYourTV as default Home launcher..."
     adb -s "$TARGET" shell "pm disable-user --user 0 com.google.android.apps.tv.launcherx" >/dev/null 2>&1 || true
-    adb -s "$TARGET" shell "pm disable-user --user 0 com.google.android.tungsten.setupwraith" >/dev/null 2>&1 || true
+
+    local wifi_owners
+    wifi_owners="$(adb -s "$TARGET" shell "dumpsys wifi" 2>/dev/null | grep -o 'cname=[^ ]*' || true)"
+    if echo "$wifi_owners" | grep -q "setupwraith"; then
+        echo "  [SAFETY GUARD] Skipping setupwraith: saved Wi-Fi belongs to it."
+    else
+        adb -s "$TARGET" shell "pm disable-user --user 0 com.google.android.tungsten.setupwraith" >/dev/null 2>&1 || true
+    fi
     adb -s "$TARGET" shell "cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity" >/dev/null 2>&1 || true
 
     # -----------------------------------------------------------------------------

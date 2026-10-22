@@ -2,6 +2,8 @@
 <resources>
     <bool name="rtl_app_grid">false</bool>
     <bool name="rtl_menu_bar">false</bool>
-    <!-- Other locales keep the date on one line, ellipsized as before. -->
+    <!-- Multi-line date on Home -->
     <bool name="date_single_line">false</bool>
+    <bool name="multi_line_date">true</bool>
+    <bool name="show_weather">true</bool>
 </resources>

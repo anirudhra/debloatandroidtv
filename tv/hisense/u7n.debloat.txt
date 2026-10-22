@@ -19,6 +19,9 @@ com.vt.tv.calmanconnector
 tv.mopa.ginga
 com.vt.tv.interactive
 com.vt.tv.mobiledeviceconnectiontips
+com.hisense.odinbrowser
+com.vidaa.oemtabcontentprovider
+net.vidaatv.hisense.android.tv
 
 # --- Background Lockdown (Starve Background CPU/Data, Do Not Disable) ---
 # Disabling these packages with 'pm disable-user' triggers recovery on Hisense MediaTek,

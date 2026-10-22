@@ -65,7 +65,7 @@
                 android:singleLine="true"
                 android:textColor="#B3FFFFFF"
                 android:textSize="12sp"
-                android:fontFamily="@font/outfit_medium"
+                android:fontFamily="@string/font_medium"
                 android:letterSpacing="0.22"
                 android:textAllCaps="true" />
         </LinearLayout>
@@ -78,7 +78,7 @@
             android:singleLine="true"
             android:textColor="#FFFFFFFF"
             android:textSize="34sp"
-            android:fontFamily="@font/outfit_light"
+            android:fontFamily="@string/font_light"
             android:letterSpacing="-0.01"
             android:includeFontPadding="false" />
 
@@ -90,7 +90,7 @@
             android:singleLine="true"
             android:textColor="#99FFFFFF"
             android:textSize="12sp"
-            android:fontFamily="@font/outfit_medium"
+            android:fontFamily="@string/font_medium"
             android:letterSpacing="0.12" />
     </LinearLayout>
 
@@ -118,7 +118,7 @@
             android:layout_height="wrap_content"
             android:textColor="#FFFFFFFF"
             android:textSize="48sp"
-            android:fontFamily="@font/outfit_light"
+            android:fontFamily="@string/font_light"
             android:letterSpacing="-0.02"
             android:includeFontPadding="false"
             android:singleLine="true" />
@@ -133,7 +133,7 @@
             android:singleLine="true"
             android:textColor="#B3FFFFFF"
             android:textSize="15sp"
-            android:fontFamily="@font/outfit_light"
+            android:fontFamily="@string/font_light"
             android:visibility="gone" />
 
         <LinearLayout
@@ -185,10 +185,9 @@
                     android:layout_marginStart="4dp"
                     android:textColor="#8CFFFFFF"
                     android:textSize="12sp"
-                    android:fontFamily="@font/outfit_medium"
+                    android:fontFamily="@string/font_medium"
                     android:letterSpacing="0.22"
-                    android:textAllCaps="true"
-                    android:visibility="gone" />
+                    android:textAllCaps="true" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -204,7 +203,7 @@
                         android:format24Hour="HH:mm"
                         android:textColor="#FFFFFFFF"
                         android:textSize="52sp"
-                        android:fontFamily="@font/outfit_light"
+                        android:fontFamily="@string/font_light"
                         android:letterSpacing="-0.04"
                         android:includeFontPadding="false" />
 
@@ -219,14 +218,13 @@
                         android:format24Hour=""
                         android:textColor="#B3FFFFFF"
                         android:textSize="15sp"
-                        android:fontFamily="@font/outfit_medium"
+                        android:fontFamily="@string/font_medium"
                         android:letterSpacing="0.08"
                         android:textAllCaps="true" />
 
                     <View
-                        android:id="@+id/clockDivider"
                         android:layout_width="1dp"
-                        android:layout_height="61dp"
+                        android:layout_height="48dp"
                         android:layout_gravity="bottom"
                         android:layout_marginStart="16dp"
                         android:layout_marginEnd="16dp"
@@ -238,7 +236,7 @@
                         android:layout_weight="1"
                         android:layout_height="wrap_content"
                         android:layout_gravity="bottom"
-                        android:layout_marginBottom="8dp"
+                        android:layout_marginBottom="9dp"
                         android:orientation="vertical">
 
                         <!-- Live weather, shown when show_weather is on and data has arrived -->
@@ -252,7 +250,7 @@
                             android:ellipsize="end"
                             android:textColor="#CCFFFFFF"
                             android:textSize="15sp"
-                            android:fontFamily="@font/outfit_regular"
+                            android:fontFamily="@string/font_regular"
                             android:letterSpacing="0.02"
                             android:includeFontPadding="false"
                             android:visibility="gone" />
@@ -267,7 +265,7 @@
                             android:ellipsize="end"
                             android:textColor="#E6FFFFFF"
                             android:textSize="17sp"
-                            android:fontFamily="@font/outfit_regular"
+                            android:fontFamily="@string/font_regular"
                             android:letterSpacing="0.02"
                             android:includeFontPadding="false"
                             android:visibility="gone" />
@@ -277,16 +275,16 @@
                             android:gravity="left"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:singleLine="false"
+                            android:singleLine="@bool/date_single_line"
                             android:maxLines="2"
-                            android:lineSpacingExtra="3dp"
+                            android:lineSpacingExtra="6dp"
                             android:ellipsize="end"
                             android:format12Hour="@string/date_format_home"
                             android:format24Hour="@string/date_format_home"
                             android:textColor="#A6FFFFFF"
                             android:textSize="14sp"
-                            android:fontFamily="@font/outfit_regular"
-                            android:letterSpacing="0.12"
+                            android:fontFamily="@string/font_regular"
+                            android:letterSpacing="0.14"
                             android:textAllCaps="true" />
                     </LinearLayout>
                 </LinearLayout>
@@ -297,10 +295,9 @@
                  row; gone, it takes no space. -->
             <TextView
                 android:id="@+id/stats"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_below="@id/leftBlock"
                 android:layout_alignStart="@id/leftBlock"
-                android:layout_alignEnd="@id/leftBlock"
                 android:gravity="left"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
@@ -308,7 +305,7 @@
                 android:ellipsize="end"
                 android:textColor="#D9FFFFFF"
                 android:textSize="14sp"
-                android:fontFamily="@font/outfit_medium"
+                android:fontFamily="@string/font_medium"
                 android:letterSpacing="0.04"
                 android:focusable="false"
                 android:visibility="gone" />
@@ -333,8 +330,11 @@
 
                 <TextView
                     android:id="@+id/btnWifi"
-                    style="@style/TopButtonIcon"
-                    android:contentDescription="@string/wifi"
+                    style="@style/TopButton"
+                    android:maxWidth="180dp"
+                    android:singleLine="true"
+                    android:ellipsize="end"
+                    android:text="@string/wifi"
                     android:drawableStart="@drawable/ic_wifi"
                     android:nextFocusDown="@+id/grid" />
 
@@ -346,55 +346,70 @@
                     android:nextFocusDown="@+id/grid" />
 
                 <TextView
-                    android:id="@+id/btnSettings"
+                    android:id="@+id/btnLibraryTop"
                     style="@style/TopButtonIcon"
-                    android:contentDescription="@string/settings"
+                    android:visibility="gone"
+                    android:contentDescription="@string/app_library"
+                    android:drawableStart="@drawable/ic_apps"
+                    android:nextFocusDown="@+id/grid" />
+
+                <TextView
+                    android:id="@+id/btnSettings"
+                    style="@style/TopButton"
+                    android:text="@string/settings"
                     android:drawableStart="@drawable/ic_settings"
                     android:nextFocusDown="@+id/grid" />
             </LinearLayout>
+
             <!-- HDMI Hotplug Alert Banner -->
-    <LinearLayout
-        android:id="@+id/alertInputBanner"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="20dp"
-        android:background="@drawable/glass_panel"
-        android:paddingStart="22dp"
-        android:paddingEnd="22dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:elevation="16dp"
-        android:visibility="gone">
+            <LinearLayout
+                android:id="@+id/alertInputBanner"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentTop="true"
+                android:layout_centerHorizontal="true"
+                android:layout_marginTop="20dp"
+                android:background="@drawable/glass_panel"
+                android:paddingStart="22dp"
+                android:paddingEnd="22dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:focusable="true"
+                android:clickable="true"
+                android:visibility="gone">
 
-        <ImageView
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:src="@drawable/ic_input" />
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:src="@drawable/ic_input"
+                    android:tint="#FFFFFFFF"
+                    android:layout_marginEnd="12dp" />
 
-        <TextView
-            android:id="@+id/alertInputText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:textColor="#FFFFFFFF"
-            android:textSize="14sp"
-            android:fontFamily="@font/outfit_medium" />
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="14dp"
-            android:text="@string/switch_input"
-            android:textColor="#99FFFFFF"
-            android:textSize="13sp"
-            android:fontFamily="@font/outfit_regular" />
-    </LinearLayout>
+                    <TextView
+                        android:id="@+id/alertInputText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#FFFFFFFF"
+                        android:textSize="15sp"
+                        android:fontFamily="@string/font_medium" />
 
-</RelativeLayout>
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/switch_input"
+                        android:textColor="#B3FFFFFF"
+                        android:textSize="12sp"
+                        android:fontFamily="@string/font_regular" />
+                </LinearLayout>
+            </LinearLayout>
+        </RelativeLayout>
 
         <!-- The wrapper clips at the grid's edge; the grid itself must not clip so scaled tiles can overflow their cells. -->
         <FrameLayout
@@ -409,6 +424,8 @@
                 android:layout_height="match_parent"
                 android:paddingTop="10dp"
                 android:paddingBottom="40dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
                 android:clipToPadding="false"
                 android:clipChildren="false"
                 android:overScrollMode="never"
