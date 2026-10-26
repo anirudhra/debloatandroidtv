@@ -60,6 +60,7 @@ cp "$CUSTOM_DIR/Config.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/
 cp "$CUSTOM_DIR/HomeKeyService.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/AppAdapter.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/AppLaunchActivity.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
+cp "$CUSTOM_DIR/QuickSettingsActivity.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/RemoteKeys.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/ServiceRepair.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/Sleep.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"

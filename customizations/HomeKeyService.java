@@ -144,8 +144,7 @@ public class HomeKeyService extends AccessibilityService {
                 long now = SystemClock.uptimeMillis();
                 if (now - lastSettingsTrigger > 400) {
                     lastSettingsTrigger = now;
-                    Intent open = settingsPanel ? new Intent(this, QuickSettingsActivity.class)
-                            : SystemSettings.intent(this, Settings.ACTION_SETTINGS);
+                    Intent open = new Intent(this, QuickSettingsActivity.class);
                     try {
                         startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                     } catch (ActivityNotFoundException | SecurityException unavailable) {

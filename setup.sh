@@ -894,7 +894,14 @@ do_apply() {
     fi
 
     adb -s "$TARGET" push "$APK" /data/local/tmp/tvhome.apk >/dev/null 2>&1
-    adb -s "$TARGET" shell "pm install -r /data/local/tmp/tvhome.apk; rm -f /data/local/tmp/tvhome.apk" >/dev/null 2>&1
+    INSTALL_OUT="$(adb -s "$TARGET" shell "pm install -r /data/local/tmp/tvhome.apk" 2>&1 || true)"
+    if [[ "$INSTALL_OUT" != *"Success"* ]]; then
+        echo "  Replacing existing launcher APK (signature/version update)..."
+        adb -s "$TARGET" shell "pm enable --user 0 com.google.android.apps.tv.launcherx" >/dev/null 2>&1 || true
+        adb -s "$TARGET" shell "pm uninstall com.gathin.tvhome" >/dev/null 2>&1 || true
+        adb -s "$TARGET" shell "pm install /data/local/tmp/tvhome.apk" >/dev/null 2>&1
+    fi
+    adb -s "$TARGET" shell "rm -f /data/local/tmp/tvhome.apk" >/dev/null 2>&1 || true
     adb -s "$TARGET" shell "pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION" >/dev/null 2>&1 || true
     adb -s "$TARGET" shell "pm grant com.gathin.tvhome android.permission.ACCESS_COARSE_LOCATION" >/dev/null 2>&1 || true
     adb -s "$TARGET" shell "pm grant com.gathin.tvhome android.permission.WRITE_SECURE_SETTINGS" >/dev/null 2>&1 || true

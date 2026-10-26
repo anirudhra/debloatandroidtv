@@ -1,17 +1,19 @@
 diff --git a/launcher/app/src/main/AndroidManifest.xml b/launcher/app/src/main/AndroidManifest.xml
-index 4cee7a6b..3cd8fe06 100644
+index 4cee7a6b..0d99590d 100644
 --- a/launcher/app/src/main/AndroidManifest.xml
 +++ b/launcher/app/src/main/AndroidManifest.xml
-@@ -9,6 +9,8 @@
+@@ -9,6 +9,10 @@
  
      <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
      <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 +    <uses-permission android:name="android.permission.INTERNET" />
 +    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
++    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
++    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
      <!-- Needed since Android 10 to read the Wi-Fi network name for the network pill. Never requested at
           runtime: build-and-install grants it with pm grant, so lint's Android 12 "ask for COARSE with
           FINE" rule does not apply here. -->
-@@ -38,6 +40,10 @@
+@@ -38,6 +42,10 @@
          <intent>
              <action android:name="android.settings.MANAGE_APPLICATIONS_SETTINGS" />
          </intent>
@@ -22,7 +24,7 @@ index 4cee7a6b..3cd8fe06 100644
          <intent>
              <action android:name="android.intent.action.MAIN" />
              <category android:name="android.intent.category.LAUNCHER" />
-@@ -119,7 +125,7 @@
+@@ -119,7 +127,7 @@
          <!-- Remote Settings button panel (settings_key_panel); own task so the app behind stays put. -->
          <activity
              android:name=".QuickSettingsActivity"
@@ -31,7 +33,7 @@ index 4cee7a6b..3cd8fe06 100644
              android:taskAffinity=""
              android:launchMode="singleTop"
              android:excludeFromRecents="true"
-@@ -148,6 +154,22 @@
+@@ -148,6 +156,22 @@
                  android:resource="@xml/home_key_service" />
          </service>
  
@@ -54,7 +56,7 @@ index 4cee7a6b..3cd8fe06 100644
          <!-- The same clock, started by Home itself after home_idle_clock_minutes without input. -->
          <activity
              android:name=".ClockActivity"
-@@ -169,6 +191,24 @@
+@@ -169,6 +193,24 @@
              </intent-filter>
          </service>
  
@@ -180,7 +182,7 @@ index 6071c886..527098e0 100644
  
      /**
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java b/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java
-index 3fd973d5..1ce7cb42 100644
+index 3fd973d5..5ed929fb 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java
 @@ -7,10 +7,12 @@ import android.content.BroadcastReceiver;
@@ -217,7 +219,7 @@ index 3fd973d5..1ce7cb42 100644
          RemoteKeys.applyKeyFilter(this, config.keyFilter);
          stockHome.clear();
          if (!config.stockHomeRedirect.isEmpty()) {
-@@ -128,18 +133,24 @@ public class HomeKeyService extends AccessibilityService {
+@@ -128,18 +133,23 @@ public class HomeKeyService extends AccessibilityService {
  
      @Override
      protected boolean onKeyEvent(KeyEvent event) {
@@ -238,8 +240,7 @@ index 3fd973d5..1ce7cb42 100644
 +                long now = SystemClock.uptimeMillis();
 +                if (now - lastSettingsTrigger > 400) {
 +                    lastSettingsTrigger = now;
-+                    Intent open = settingsPanel ? new Intent(this, QuickSettingsActivity.class)
-+                            : SystemSettings.intent(this, Settings.ACTION_SETTINGS);
++                    Intent open = new Intent(this, QuickSettingsActivity.class);
 +                    try {
 +                        startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
 +                    } catch (ActivityNotFoundException | SecurityException unavailable) {
@@ -249,7 +250,7 @@ index 3fd973d5..1ce7cb42 100644
              }
              return true;
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
-index 5be43c94..c18e4d9e 100644
+index 5be43c94..a31f1386 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 @@ -3,6 +3,7 @@ package com.gathin.tvhome;
@@ -339,15 +340,28 @@ index 5be43c94..c18e4d9e 100644
          clockBlock = findViewById(R.id.leftBlock);
          greetingColor = greeting.getCurrentTextColor();
          if (getResources().getBoolean(R.bool.rtl_menu_bar)) {
-@@ -634,10 +665,25 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -590,11 +621,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+             ((TextView) btnSettings).setText(R.string.launcher_settings);
+             ((TextView) btnSettings).setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_home_settings_pill, 0, 0, 0);
+         }
+-        btnSettings.setOnClickListener(v -> {
+-            if (launcherSettingsButton) startActivityForResult(
+-                    new Intent(this, LauncherSettingsActivity.class), LAUNCHER_SETTINGS_REQUEST);
+-            else open(systemIntent(Settings.ACTION_SETTINGS));
+-        });
++        btnSettings.setOnClickListener(v -> open(new Intent(this, QuickSettingsActivity.class)));
+         btnReorder = findViewById(R.id.btnReorder);
+         btnReorder.setOnClickListener(v -> toggleReorder());
+         btnReorder.setVisibility(cfg.reorderButton ? View.VISIBLE : View.GONE);
+@@ -633,10 +660,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+             makeIconOnly((TextView) btnSettings);
          }
          if (cfg.iconOnlyInputs) makeIconOnly((TextView) btnInputs);
-         btnSettings.setOnLongClickListener(v -> {
+-        btnSettings.setOnLongClickListener(v -> {
 -            showSettingsMenu();
-+            showControlCenter(btnSettings);
-             return true;
-         });
- 
+-            return true;
+-        });
++
 +        weatherView = findViewById(R.id.weather);
 +        showWeather = getResources().getBoolean(R.bool.show_weather);
 +        alertInputBanner = findViewById(R.id.alertInputBanner);
@@ -362,11 +376,10 @@ index 5be43c94..c18e4d9e 100644
 +                }
 +            });
 +        }
-+
+ 
          // Keep focus on the top bar at its ends and at the top: Android's focus finder would otherwise
          // jump to a tile far below when there is nothing in that direction.
-         boolean rtlMenuBar = getResources().getBoolean(R.bool.rtl_menu_bar);
-@@ -726,8 +772,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -726,8 +764,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          setIntent(new Intent(Intent.ACTION_MAIN));
          if (btnInputs.getVisibility() != View.VISIBLE) return true;
          if (btnInputs.isLaidOut()) {
@@ -382,7 +395,7 @@ index 5be43c94..c18e4d9e 100644
              return true;
          }
          // Cold start: the popup anchors to the pill, so wait for the first layout.
-@@ -792,6 +843,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -792,6 +835,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onResume() {
          super.onResume();
@@ -390,7 +403,7 @@ index 5be43c94..c18e4d9e 100644
          // A festival that started or ended while Home was in the background: rebuild with or without it.
          if (festive != festival.active(LocalDate.now())) {
              recreate();
-@@ -837,6 +889,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -837,6 +881,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          if (showStats) startStats();
          sky.update();
          wallpaperPlayer.start();
@@ -399,7 +412,7 @@ index 5be43c94..c18e4d9e 100644
          handler.postDelayed(minuteTick, MINUTE_MS);
          if (festive && diya != null) {
              diya.start();
-@@ -1003,6 +1057,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1003,6 +1049,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onPause() {
          super.onPause();
@@ -408,22 +421,33 @@ index 5be43c94..c18e4d9e 100644
          root.removeCallbacks(showIdleClock);
          endReorder();   // Home or another app while reordering keeps the order so far
          wallpaperPlayer.stop();
-@@ -1092,6 +1148,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
-             }
-             return true;
-         }
-+        for (int code : settingsScancodes) {
-+            if (event.getScanCode() != code) continue;
+@@ -1084,11 +1132,23 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+      * nothing even on Home.
+      */
+     private boolean handleSettingsKey(KeyEvent event) {
++        if (event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS) {
 +            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
-+                open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
-+                        : systemIntent(Settings.ACTION_SETTINGS));
++                open(new Intent(this, QuickSettingsActivity.class));
 +            }
 +            return true;
 +        }
-         return false;
-     }
- 
-@@ -1109,6 +1173,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+         for (int code : settingsKeycodes) {
+             if (event.getKeyCode() != code) continue;
+             if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+-                open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
+-                        : systemIntent(Settings.ACTION_SETTINGS));
++                open(new Intent(this, QuickSettingsActivity.class));
++            }
++            return true;
++        }
++        for (int code : settingsScancodes) {
++            if (event.getScanCode() != code) continue;
++            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
++                open(new Intent(this, QuickSettingsActivity.class));
+             }
+             return true;
+         }
+@@ -1109,6 +1169,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
       */
      @Override
      public boolean dispatchKeyEvent(KeyEvent event) {
@@ -444,7 +468,7 @@ index 5be43c94..c18e4d9e 100644
          if (handleSettingsKey(event)) return true;
          if (tileMenuEnabled && !reordering && openPopup == null && cardPrompt == null
                  && event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
-@@ -2588,6 +2666,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2588,6 +2662,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
       *  throws SecurityException, which used to take Home down with it (YaOS before the manifest asked
       *  for ACCESS_TV_SOURCE). */
      private void openInput(String inputId) {
@@ -461,7 +485,7 @@ index 5be43c94..c18e4d9e 100644
          Integer source = mappedSource(inputId);
          if (source != null && source >= 0 && !inputAction.isEmpty()) {
              try {
-@@ -2603,6 +2691,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2603,6 +2687,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                  ? new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "vnd.android.cursor.item/channel")
                  : new Intent(Intent.ACTION_VIEW, uri.buildUpon().scheme(inputUriScheme).build()))
                  .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -477,7 +501,7 @@ index 5be43c94..c18e4d9e 100644
          try {
              startActivity(view);
              return;
-@@ -2876,6 +2973,218 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2876,6 +2969,218 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          rows.getChildAt(0).requestFocus();
      }
  
@@ -696,7 +720,7 @@ index 5be43c94..c18e4d9e 100644
      /** The header opens launcher settings directly; hold OK keeps the extra home actions available. */
      private void showSettingsMenu() {
          View anchor = findViewById(R.id.btnSettings);
-@@ -2929,6 +3238,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2929,6 +3234,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          });
          addSettingsMenuRow(rows, popup, R.string.library_app_info, () -> open(new Intent(
                  Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg))));
@@ -708,6 +732,210 @@ index 5be43c94..c18e4d9e 100644
          panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
          popup.setWidth(Math.max((int) (200 * density), panel.getMeasuredWidth()));
          // Dock tiles sit near the bottom of the screen: open the menu above the tile when it would not fit below.
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/QuickSettingsActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/QuickSettingsActivity.java
+index 8f5a1aa8..d2aa7e03 100644
+--- a/launcher/app/src/main/java/com/gathin/tvhome/QuickSettingsActivity.java
++++ b/launcher/app/src/main/java/com/gathin/tvhome/QuickSettingsActivity.java
+@@ -1,27 +1,42 @@
+ package com.gathin.tvhome;
+ 
+ import android.app.Activity;
++import android.app.ActivityManager;
+ import android.content.ActivityNotFoundException;
++import android.content.Context;
+ import android.content.Intent;
++import android.content.pm.ApplicationInfo;
+ import android.os.Bundle;
++import android.os.Handler;
++import android.os.Looper;
+ import android.provider.Settings;
++import android.view.KeyEvent;
+ import android.view.View;
++import android.view.ViewGroup;
+ import android.widget.ImageView;
+ import android.widget.LinearLayout;
+ import android.widget.TextView;
+ import android.widget.Toast;
+ 
+ /**
+- * The panel the remote's Settings button opens when {@code settings_key_panel} is on (HomeKeyService):
++ * The panel the remote's Settings button (and the Home screen Settings gear pill) opens:
+  * a few glass rows under the Settings pill, over Home or whatever app is playing. Translucent and in a
+  * task of its own, so the app behind keeps running and Back returns to it. Pressing Settings again
+  * closes the panel.
+  */
+ public final class QuickSettingsActivity extends Activity {
+ 
++    private final Handler handler = new Handler(Looper.getMainLooper());
++    private int[] settingsKeycodes = new int[0];
++    private int[] settingsScancodes = new int[0];
++
+     @Override
+     protected void onCreate(Bundle state) {
+         super.onCreate(state);
++        Config cfg = Config.load(this);
++        settingsKeycodes = cfg.settingsKeycodes;
++        settingsScancodes = cfg.settingsScancodes;
++
+         setContentView(R.layout.activity_quick_settings);
+         findViewById(R.id.scrim).setOnClickListener(v -> finish());
+         LinearLayout rows = findViewById(R.id.rows);
+@@ -33,6 +48,24 @@ public final class QuickSettingsActivity extends Activity {
+         // Through Home, so it rebuilds with the new choices when Launcher settings closes.
+         addRow(rows, R.drawable.ic_home_settings, R.string.launcher_settings, 0,
+                 new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_LAUNCHER_SETTINGS));
++
++        addSeparator(rows);
++
++        // Free up memory
++        final TextView[] memStatus = new TextView[1];
++        memStatus[0] = addActionRow(rows, 0, getString(R.string.free_memory),
++                getString(R.string.memory_free, availableMb()), false, () -> freeMemory(memStatus[0]));
++
++        // Screensaver
++        addActionRow(rows, 0, getString(R.string.screensaver), null, true, this::startScreensaver);
++
++        // Sleep timer
++        final TextView[] timerStatus = new TextView[1];
++        timerStatus[0] = addActionRow(rows, 0, getString(R.string.sleep_timer), sleepStatus(), false, () -> {
++            Sleep.cycle(this);
++            if (timerStatus[0] != null) timerStatus[0].setText(sleepStatus());
++        });
++
+         rows.getChildAt(0).requestFocus();
+     }
+ 
+@@ -43,6 +76,24 @@ public final class QuickSettingsActivity extends Activity {
+         finish();
+     }
+ 
++    @Override
++    public boolean dispatchKeyEvent(KeyEvent event) {
++        if (isSettingsKey(event)) {
++            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
++                finish();
++            }
++            return true;
++        }
++        return super.dispatchKeyEvent(event);
++    }
++
++    private boolean isSettingsKey(KeyEvent event) {
++        if (event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS) return true;
++        for (int code : settingsKeycodes) if (event.getKeyCode() == code) return true;
++        for (int code : settingsScancodes) if (event.getScanCode() == code) return true;
++        return false;
++    }
++
+     /** Anything else taking the screen (Home, an app, a screensaver) closes the panel. */
+     @Override
+     protected void onPause() {
+@@ -51,6 +102,17 @@ public final class QuickSettingsActivity extends Activity {
+         overridePendingTransition(0, 0);
+     }
+ 
++    private void addSeparator(LinearLayout rows) {
++        float density = getResources().getDisplayMetrics().density;
++        View line = new View(this);
++        line.setBackgroundColor(0x1FFFFFFF);
++        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
++                ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, (int) density));
++        int m = (int) (6 * density), h = (int) (12 * density);
++        lp.setMargins(h, m, h, m);
++        rows.addView(line, lp);
++    }
++
+     private void addRow(LinearLayout rows, int icon, int title, int status, Intent target) {
+         View row = getLayoutInflater().inflate(R.layout.item_input, rows, false);
+         ((ImageView) row.findViewById(R.id.icon)).setImageResource(icon);
+@@ -69,4 +131,87 @@ public final class QuickSettingsActivity extends Activity {
+         });
+         rows.addView(row);
+     }
++
++    private TextView addActionRow(LinearLayout rows, int icon, String title, String status,
++                                  boolean closeOnClick, Runnable action) {
++        View row = getLayoutInflater().inflate(R.layout.item_input, rows, false);
++        ImageView iconView = row.findViewById(R.id.icon);
++        if (icon != 0) {
++            iconView.setImageResource(icon);
++            iconView.setVisibility(View.VISIBLE);
++        } else {
++            iconView.setVisibility(View.GONE);
++        }
++        ((TextView) row.findViewById(R.id.title)).setText(title);
++        row.findViewById(R.id.dot).setVisibility(View.GONE);
++        TextView hint = row.findViewById(R.id.status);
++        if (status != null) {
++            hint.setText(status);
++            hint.setVisibility(View.VISIBLE);
++        } else {
++            hint.setVisibility(View.GONE);
++        }
++        row.setOnClickListener(v -> {
++            action.run();
++            if (closeOnClick) {
++                finish();
++            }
++        });
++        rows.addView(row);
++        return hint;
++    }
++
++    private String sleepStatus() {
++        int left = Sleep.minutesLeft(this);
++        return left > 0 ? getString(R.string.minutes_left, left) : getString(R.string.off);
++    }
++
++    private long availableMb() {
++        ActivityManager am = getSystemService(ActivityManager.class);
++        if (am == null) return 0;
++        ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
++        am.getMemoryInfo(mi);
++        return mi.availMem / (1024 * 1024);
++    }
++
++    private void freeMemory(TextView statusView) {
++        ActivityManager am = getSystemService(ActivityManager.class);
++        if (am == null) return;
++        ActivityManager.MemoryInfo before = new ActivityManager.MemoryInfo();
++        am.getMemoryInfo(before);
++        for (ApplicationInfo ai : getPackageManager().getInstalledApplications(0)) {
++            if ((ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
++            if (ai.packageName.equals(getPackageName())) continue;
++            am.killBackgroundProcesses(ai.packageName);
++        }
++        final Context appContext = getApplicationContext();
++        handler.postDelayed(() -> {
++            ActivityManager.MemoryInfo after = new ActivityManager.MemoryInfo();
++            am.getMemoryInfo(after);
++            long avail = after.availMem / (1024 * 1024);
++            long freed = Math.max(0, after.availMem - before.availMem) / (1024 * 1024);
++            if (statusView != null && !isFinishing()) {
++                statusView.setText(getString(R.string.memory_free, avail));
++            }
++            Toast.makeText(appContext, appContext.getString(R.string.memory_freed, freed, avail),
++                    Toast.LENGTH_LONG).show();
++        }, 800);
++    }
++
++    private void startScreensaver() {
++        try {
++            Intent dream = new Intent(Intent.ACTION_MAIN)
++                    .setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
++                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++            if (getPackageManager().resolveActivity(dream, 0) == null) {
++                dream = new Intent(this, ClockActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++            }
++            startActivity(dream);
++        } catch (Exception e) {
++            try {
++                startActivity(new Intent("android.settings.DREAM_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
++            } catch (Exception ignored) {
++            }
++        }
++    }
+ }
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/RemoteKeys.java b/launcher/app/src/main/java/com/gathin/tvhome/RemoteKeys.java
 index dd1a8a14..13bdb977 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/RemoteKeys.java
@@ -1078,10 +1306,10 @@ index 8465d069..8ee8afd8 100644
      }
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/Sleep.java b/launcher/app/src/main/java/com/gathin/tvhome/Sleep.java
 new file mode 100644
-index 00000000..c1142d64
+index 00000000..72797224
 --- /dev/null
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/Sleep.java
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,91 @@
 +package com.gathin.tvhome;
 +
 +import android.app.AlarmManager;
@@ -1165,7 +1393,11 @@ index 00000000..c1142d64
 +        long at = System.currentTimeMillis() + minutes * 60_000L;
 +        prefs(c).edit().putLong(AT, at).apply();
 +        if (am != null) {
-+            am.setExactAndAllowWhileIdle(AlarmManager.RTC, at, pi);
++            try {
++                am.setExactAndAllowWhileIdle(AlarmManager.RTC, at, pi);
++            } catch (SecurityException e) {
++                am.setAndAllowWhileIdle(AlarmManager.RTC, at, pi);
++            }
 +        }
 +    }
 +}
@@ -1496,39 +1728,8 @@ index 00000000..1c1bec47
 +}
 diff --git a/launcher/app/src/main/res/drawable/banner_youtube.png b/launcher/app/src/main/res/drawable/banner_youtube.png
 new file mode 100644
-index 0000000000000000000000000000000000000000..0a247900f75a2330b9d4038dca004db8dd651bb6
-GIT binary patch
-literal 1330
-zcmV-21<m@2P)<h;3K|Lk000e1NJLTq00BS%006WI0{{R3(mDkr0001rP)t-s_4W1m
-zxVZXydiz^j{XISVYisw%$N8C={7g*#9v=Sy04OLZ!otG#=H~q^E$Haz&d$!;+uOCZ
-zwKOy|o12@Cj*d=FPJw}eTU%SGsHk*wboSQP_^7C8XlOw}LI1$O|A2u15D@?W|Nr3N
-z|6pMMKtTD4iT|LW|M2ktP*DFcF#nK{|8Q{sARt`x!c+hN1Y=1=K~#7F?8>zfz(5cL
-zurodN->;ccryeO=2mk;800000000000000000000;P1Lke;dZr^mO|r-iVa@GS>D<
-z9ZR261d$i^%|p3y5D3FuFK_`=kWfxa@5%c=-W9{}?^q+og@oYoH!Ub@CHsvKtF?%$
-zi);MG^1vN}W#`w)&%OBkiv^@`Naj&)tl4G=0CZenss6wT3~KJEn5TB*hHVB1pncy0
-zKmXjD&n#g0ip~!ecc{Y^`0Zx`a3AdWirx>c8`kV_1^!4O@B}w8?(oCGjfTS&c=|I5
-zr^pL)7Bku&uE1|;1pW>u9O<edxkIuI=^flLxsiR(0zak^_%WQY36mBR+U!{4wFT6H
-zpVJ8ZjzWeyYa!xL1!4_JRme<a*7~`q4p`vNM6kd>601?fY|2q!h2(u1Jsz;Y4>2ic
-z=NCKFF%s4+En;NjCiFCfoNc>e^?T7eW&)RjAkdosr)?z*sLr^0zSCI+US3^qDv&e?
-zou?YJd6h&{^S~%+B=5<3!`B5a1VNxQ++ieh$bkc!Rp902+0E7h+n~*0LGC!k$YcU5
-zzi8ok#~XbcgST;k|GB%^QlJVA88j9u4*ao10w)eMc^n5iOC1e?m-puzRnnmL*$dp}
-zeVRZg5eN{k`5Hq;fu5^}tptuf<Hl!;3$RnR_CKW)IJ7mN#~7;yw1V;p^qf6zA<+8&
-z+a)k!HR+MxluV#tOitvuLGg|svk3%G7n=#hB+@3d6()2T6y|Uefg`=`=}<-0<gm>t
-z5Zpg+BoG%tg`{w?VD(HQ(4W&{Am-t1UV-51W<!CU%OT8FL6e=3RWgAB153gy+;6iA
-z1ZOWB39Lwg(XF?s`&SfbLr6~!_r(ch98@%KB4kV{P~rm-f#pnLHbS6W5ZI>_$l?Oa
-zT13#6M&3t(8<jCY1%XW_fkynJ!AFZKr0JuZ$|R7|7xO3w2JV>HQQ-E?1oH4Z6fZDC
-zJB!v8wqSu78ma*4Wm`mm%HPs2Phel}mr6MV%DKSuzSfKgv~Tq+T&)SjyRu~q6tpNb
-zuP9Kg3B+k$jgvI~K1T&AI^qud>is|nEaT;(h(IC@&DE3w2OQU=BQ0>6a$awn3xtGW
-z?S9xJS!osp;+aNHR3OeNYs4@gqv6{Y@`7bVU>k<o=Qq*|r&pEXO9Dqf7?nj3V)$4!
-z6J+8GEWwobstS3<HzH7TPf$>y>jh>4V?lgQMdmG-ig?L9A`q7aFy1R+To9-hf;fOF
-z%z0po+2#-tC?`&-)hyReEC{4QtymXmhM6f{bIMT8Mw^I0rp??R&2?aUNuZhsA*Pe#
-z%#@lq=!)9v1$u|Vk+1~NH~F-?yi657LO*T2kXaC71oJ1J8WxbP|6BDS3fpWL2m26#
-z++-`Fjt6OUT<B?qK5lnC{0-Nq>_}|O|Cjle|J%Rq+pz!u006)sf9qlFDUXzY00000
-o0000000000000000001B7UOYder5u@CIA2c07*qoM6N<$f)n;*3IG5A
-
-literal 0
-HcmV?d00001
-
+index 00000000..0a247900
+Binary files /dev/null and b/launcher/app/src/main/res/drawable/banner_youtube.png differ
 diff --git a/launcher/app/src/main/res/drawable/ic_wifi_off.xml b/launcher/app/src/main/res/drawable/ic_wifi_off.xml
 new file mode 100644
 index 00000000..65231c42
@@ -1663,7 +1864,7 @@ index e83b7f93..0c8870dc 100644
 +    <bool name="show_weather">true</bool>
  </resources>
 diff --git a/launcher/app/src/main/res/values/config.xml b/launcher/app/src/main/res/values/config.xml
-index f600676d..b17fdc29 100644
+index f600676d..ccb0aad0 100644
 --- a/launcher/app/src/main/res/values/config.xml
 +++ b/launcher/app/src/main/res/values/config.xml
 @@ -17,10 +17,11 @@
@@ -1712,7 +1913,14 @@ index f600676d..b17fdc29 100644
      <!-- TVs with no TvInputManager have no HDMI list to read, but their own source-selection panel
           still switches inputs (TCL Android TV 9 again). When nothing could be listed, the Inputs menu
           offers one row that starts this service: component first, then action. The component can also be an
-@@ -135,7 +147,7 @@
+@@ -129,13 +141,13 @@
+     <!-- What those Settings buttons open: false, the TV's Settings; true, a small glass panel at the top right
+          with TV settings, Display, Network, Apps (re-enable an app) and Launcher settings, over whatever is on screen.
+          Both keys can also be set from a theme's config.json ("settings_key_keycodes": [83]). -->
+-    <bool name="settings_key_panel">false</bool>
++    <bool name="settings_key_panel">true</bool>
+ 
+     <!-- A force stop of the launcher (Settings, a cleaner app, am force-stop) takes HomeKeyService and InputKeyService
           off the enabled list. true: Home puts the helpers that were running back when it starts; one turned off in
           Settings stays off. Needs WRITE_SECURE_SETTINGS, which build-and-install grants with RESTORE_KEY_SERVICES=1
           (-RestoreKeyServices on Windows). Can also be set with "restore_key_services": true in a theme's config.json. -->

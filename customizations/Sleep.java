@@ -81,7 +81,11 @@ final class Sleep {
         long at = System.currentTimeMillis() + minutes * 60_000L;
         prefs(c).edit().putLong(AT, at).apply();
         if (am != null) {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC, at, pi);
+            try {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC, at, pi);
+            } catch (SecurityException e) {
+                am.setAndAllowWhileIdle(AlarmManager.RTC, at, pi);
+            }
         }
     }
 }

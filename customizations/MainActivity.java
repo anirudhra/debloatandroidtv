@@ -621,11 +621,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             ((TextView) btnSettings).setText(R.string.launcher_settings);
             ((TextView) btnSettings).setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_home_settings_pill, 0, 0, 0);
         }
-        btnSettings.setOnClickListener(v -> {
-            if (launcherSettingsButton) startActivityForResult(
-                    new Intent(this, LauncherSettingsActivity.class), LAUNCHER_SETTINGS_REQUEST);
-            else open(systemIntent(Settings.ACTION_SETTINGS));
-        });
+        btnSettings.setOnClickListener(v -> open(new Intent(this, QuickSettingsActivity.class)));
         btnReorder = findViewById(R.id.btnReorder);
         btnReorder.setOnClickListener(v -> toggleReorder());
         btnReorder.setVisibility(cfg.reorderButton ? View.VISIBLE : View.GONE);
@@ -664,10 +660,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             makeIconOnly((TextView) btnSettings);
         }
         if (cfg.iconOnlyInputs) makeIconOnly((TextView) btnInputs);
-        btnSettings.setOnLongClickListener(v -> {
-            showControlCenter(btnSettings);
-            return true;
-        });
 
         weatherView = findViewById(R.id.weather);
         showWeather = getResources().getBoolean(R.bool.show_weather);
@@ -1140,19 +1132,23 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * nothing even on Home.
      */
     private boolean handleSettingsKey(KeyEvent event) {
+        if (event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS) {
+            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+                open(new Intent(this, QuickSettingsActivity.class));
+            }
+            return true;
+        }
         for (int code : settingsKeycodes) {
             if (event.getKeyCode() != code) continue;
             if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
-                open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
-                        : systemIntent(Settings.ACTION_SETTINGS));
+                open(new Intent(this, QuickSettingsActivity.class));
             }
             return true;
         }
         for (int code : settingsScancodes) {
             if (event.getScanCode() != code) continue;
             if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
-                open(settingsKeyPanel ? new Intent(this, QuickSettingsActivity.class)
-                        : systemIntent(Settings.ACTION_SETTINGS));
+                open(new Intent(this, QuickSettingsActivity.class));
             }
             return true;
         }
