@@ -83,13 +83,11 @@ To make debloating scalable across multiple TV brands (Hisense, TCL, Onn, Chrome
   * **Reset app order:** Reverts ordering back to the default configuration.
 * **Instant 60fps Home Return (`TileRefresh`):** Replaces full grid recycles with package signature caching. When returning from streaming apps or video playback, the launcher displays instantly without stutter or frame drops.
 * **Self-Healing Accessibility Services (`ServiceRepair`):** Automatically recovers `HomeKeyService`, `SleepService`, and remote key listeners if Android's low-memory killer or aggressive OEM battery management drops them.
-* **Apple TV-Style Control Center:** Hold OK on the **Settings** pill to open a sleek glass overlay:
-  * **Sleep timer:** Cycle through 30 / 60 / 90 min with live remaining countdown.
-  * **Turn off now:** Puts the TV into instant standby via `SleepService` accessibility integration.
-  * **Free up memory:** One-click RAM cleaner that stops background cached apps and displays freed memory.
-  * **Sound output:** Live audio output status (Soundbar via HDMI ARC vs TV speakers) with quick jump to Sound settings.
-  * **Screensaver:** Immediately launches the active system screensaver (`Somnambulator`).
-  * **Launcher Settings & Dock Edit:** Quick access to launcher customization.
+* **Unified Single-Press Quick Settings & Control Menu (`QuickSettingsActivity`):** Press the physical **Settings** button on the remote from anywhere (or single-press OK on the top-right **Settings** gear pill on Home) to open a narrow glass overlay with **TV settings** focused first:
+  * **TV settings, Picture & display, Wi-Fi & network, Apps, and Launcher settings:** Instant access to system and launcher configuration.
+  * **Free up memory:** One-click RAM cleaner showing live available memory that stops background cached apps and displays freed MB.
+  * **Screensaver:** Immediately launches the active system screensaver (`Somnambulator` / `ClockDream`, automatically repairing `screensaver_components` when stock `dreamx`/`backdrop` is disabled).
+  * **Sleep timer:** Cycle through Off / 30 / 60 / 90 min in-place with live remaining countdown.
 * **Live Weather next to Clock:** Clean temperature and condition emoji (☀️, ⛅, 🌧️, ❄️) next to the date, powered by Open-Meteo (free, no API keys, private, cached locally every 30m).
 * **HDMI Hotplug Auto-Detection:** Instant banner notification when an HDMI device is connected or powered on (*"HDMI 2 connected · Press OK to switch"*). Press OK to switch immediately, or Back to dismiss (auto-dismisses after 8s).
 * **OLED / Mini-LED Pixel Drift:** Microscopic 1.5dp subpixel drift every minute across static clock and status elements to prevent static image retention and burn-in on premium OLED and Mini-LED panels.
