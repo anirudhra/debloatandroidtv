@@ -1,5 +1,5 @@
 diff --git a/launcher/app/src/main/AndroidManifest.xml b/launcher/app/src/main/AndroidManifest.xml
-index 4cee7a6b..d43663cb 100644
+index 4cee7a6b..3cd8fe06 100644
 --- a/launcher/app/src/main/AndroidManifest.xml
 +++ b/launcher/app/src/main/AndroidManifest.xml
 @@ -9,6 +9,8 @@
@@ -11,7 +11,18 @@ index 4cee7a6b..d43663cb 100644
      <!-- Needed since Android 10 to read the Wi-Fi network name for the network pill. Never requested at
           runtime: build-and-install grants it with pm grant, so lint's Android 12 "ask for COARSE with
           FINE" rule does not apply here. -->
-@@ -119,7 +121,7 @@
+@@ -38,6 +40,10 @@
+         <intent>
+             <action android:name="android.settings.MANAGE_APPLICATIONS_SETTINGS" />
+         </intent>
++        <intent>
++            <action android:name="android.settings.APPLICATION_DETAILS_SETTINGS" />
++            <data android:scheme="package" />
++        </intent>
+         <intent>
+             <action android:name="android.intent.action.MAIN" />
+             <category android:name="android.intent.category.LAUNCHER" />
+@@ -119,7 +125,7 @@
          <!-- Remote Settings button panel (settings_key_panel); own task so the app behind stays put. -->
          <activity
              android:name=".QuickSettingsActivity"
@@ -20,7 +31,30 @@ index 4cee7a6b..d43663cb 100644
              android:taskAffinity=""
              android:launchMode="singleTop"
              android:excludeFromRecents="true"
-@@ -169,6 +171,24 @@
+@@ -148,6 +154,22 @@
+                 android:resource="@xml/home_key_service" />
+         </service>
+ 
++        <!-- market://launch?id=<package>: package-name app launches from the Android TV Remote service
++             (Home Assistant android_tv_remote), normally served by the stock launcher. -->
++        <activity
++            android:name=".AppLaunchActivity"
++            android:exported="true"
++            android:excludeFromRecents="true"
++            android:noHistory="true"
++            android:theme="@android:style/Theme.NoDisplay">
++            <intent-filter>
++                <action android:name="android.intent.action.VIEW" />
++                <category android:name="android.intent.category.DEFAULT" />
++                <category android:name="android.intent.category.BROWSABLE" />
++                <data android:scheme="market" android:host="launch" />
++            </intent-filter>
++        </activity>
++
+         <!-- The same clock, started by Home itself after home_idle_clock_minutes without input. -->
+         <activity
+             android:name=".ClockActivity"
+@@ -169,6 +191,24 @@
              </intent-filter>
          </service>
  
@@ -45,6 +79,40 @@ index 4cee7a6b..d43663cb 100644
          <!-- tools/theme.sh writes the theme through this where the shell can't reach Android/data;
               see ThemeProvider. WRITE_SECURE_SETTINGS: the adb shell has it, ordinary apps don't. -->
          <provider
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/AppLaunchActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/AppLaunchActivity.java
+new file mode 100644
+index 00000000..1a9f6158
+--- /dev/null
++++ b/launcher/app/src/main/java/com/gathin/tvhome/AppLaunchActivity.java
+@@ -0,0 +1,28 @@
++package com.gathin.tvhome;
++
++import android.app.Activity;
++import android.content.ActivityNotFoundException;
++import android.content.Intent;
++import android.net.Uri;
++import android.os.Bundle;
++
++/** Handles market://launch?id=<package> (Android TV Remote "launch app" by package name), which the
++ *  stock launcher normally serves: opens the app's TV launch intent, then the phone launch intent. */
++public class AppLaunchActivity extends Activity {
++    @Override
++    protected void onCreate(Bundle state) {
++        super.onCreate(state);
++        try {
++            Uri data = getIntent().getData();
++            String pkg = data == null ? null : data.getQueryParameter("id");
++            if (pkg != null) {
++                Intent launch = getPackageManager().getLeanbackLaunchIntentForPackage(pkg);
++                if (launch == null) launch = getPackageManager().getLaunchIntentForPackage(pkg);
++                if (launch != null) startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
++            }
++        } catch (ActivityNotFoundException | SecurityException ignored) {
++        } finally {
++            finish();
++        }
++    }
++}
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/Config.java b/launcher/app/src/main/java/com/gathin/tvhome/Config.java
 index 6071c886..527098e0 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/Config.java
@@ -181,7 +249,7 @@ index 3fd973d5..1ce7cb42 100644
              }
              return true;
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
-index 5be43c94..dd31e158 100644
+index 5be43c94..0d99ed16 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 @@ -3,6 +3,7 @@ package com.gathin.tvhome;
@@ -298,7 +366,23 @@ index 5be43c94..dd31e158 100644
          // Keep focus on the top bar at its ends and at the top: Android's focus finder would otherwise
          // jump to a tile far below when there is nothing in that direction.
          boolean rtlMenuBar = getResources().getBoolean(R.bool.rtl_menu_bar);
-@@ -792,6 +838,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -726,8 +772,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+         setIntent(new Intent(Intent.ACTION_MAIN));
+         if (btnInputs.getVisibility() != View.VISIBLE) return true;
+         if (btnInputs.isLaidOut()) {
+-            btnInputs.requestFocus();
+-            showInputs();
++            // Android 9 delivers a new intent to a paused activity with a brief resume and pause around it, and
++            // onPause() closes popups, so open the menu once that turn on the main thread is over (#1688).
++            btnInputs.post(() -> {
++                if (isFinishing() || btnInputs.getVisibility() != View.VISIBLE) return;
++                btnInputs.requestFocus();
++                showInputs();
++            });
+             return true;
+         }
+         // Cold start: the popup anchors to the pill, so wait for the first layout.
+@@ -792,6 +843,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onResume() {
          super.onResume();
@@ -306,7 +390,7 @@ index 5be43c94..dd31e158 100644
          // A festival that started or ended while Home was in the background: rebuild with or without it.
          if (festive != festival.active(LocalDate.now())) {
              recreate();
-@@ -837,6 +884,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -837,6 +889,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          if (showStats) startStats();
          sky.update();
          wallpaperPlayer.start();
@@ -315,7 +399,7 @@ index 5be43c94..dd31e158 100644
          handler.postDelayed(minuteTick, MINUTE_MS);
          if (festive && diya != null) {
              diya.start();
-@@ -1003,6 +1052,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1003,6 +1057,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onPause() {
          super.onPause();
@@ -324,7 +408,7 @@ index 5be43c94..dd31e158 100644
          root.removeCallbacks(showIdleClock);
          endReorder();   // Home or another app while reordering keeps the order so far
          wallpaperPlayer.stop();
-@@ -1092,6 +1143,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1092,6 +1148,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              }
              return true;
          }
@@ -339,7 +423,7 @@ index 5be43c94..dd31e158 100644
          return false;
      }
  
-@@ -1109,6 +1168,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1109,6 +1173,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
       */
      @Override
      public boolean dispatchKeyEvent(KeyEvent event) {
@@ -360,7 +444,40 @@ index 5be43c94..dd31e158 100644
          if (handleSettingsKey(event)) return true;
          if (tileMenuEnabled && !reordering && openPopup == null && cardPrompt == null
                  && event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
-@@ -2876,6 +2949,212 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2588,6 +2666,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+      *  throws SecurityException, which used to take Home down with it (YaOS before the manifest asked
+      *  for ACCESS_TV_SOURCE). */
+     private void openInput(String inputId) {
++        TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
++        if (tim != null) {
++            try {
++                TvInputInfo info = tim.getTvInputInfo(inputId);
++                if (info != null && info.getParentId() != null) {
++                    inputId = info.getParentId();
++                }
++            } catch (Throwable ignored) {
++            }
++        }
+         Integer source = mappedSource(inputId);
+         if (source != null && source >= 0 && !inputAction.isEmpty()) {
+             try {
+@@ -2603,6 +2691,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+                 ? new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "vnd.android.cursor.item/channel")
+                 : new Intent(Intent.ACTION_VIEW, uri.buildUpon().scheme(inputUriScheme).build()))
+                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++        // Aim it at the TV app first: apps installed later (a streaming app, a file manager) can claim the same
++        // channel URI too, and with two or more handlers Android shows a chooser instead of the input.
++        if (!liveTvPkg.isEmpty()) {
++            try {
++                startActivity(new Intent(view).setPackage(liveTvPkg));
++                return;
++            } catch (ActivityNotFoundException | SecurityException ignored) {
++            }
++        }
+         try {
+             startActivity(view);
+             return;
+@@ -2876,6 +2973,212 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          rows.getChildAt(0).requestFocus();
      }
  
@@ -573,7 +690,7 @@ index 5be43c94..dd31e158 100644
      /** The header opens launcher settings directly; hold OK keeps the extra home actions available. */
      private void showSettingsMenu() {
          View anchor = findViewById(R.id.btnSettings);
-@@ -2929,6 +3208,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2929,6 +3232,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          });
          addSettingsMenuRow(rows, popup, R.string.library_app_info, () -> open(new Intent(
                  Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg))));
@@ -585,6 +702,374 @@ index 5be43c94..dd31e158 100644
          panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
          popup.setWidth(Math.max((int) (200 * density), panel.getMeasuredWidth()));
          // Dock tiles sit near the bottom of the screen: open the menu above the tile when it would not fit below.
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/RemoteKeys.java b/launcher/app/src/main/java/com/gathin/tvhome/RemoteKeys.java
+index dd1a8a14..13bdb977 100644
+--- a/launcher/app/src/main/java/com/gathin/tvhome/RemoteKeys.java
++++ b/launcher/app/src/main/java/com/gathin/tvhome/RemoteKeys.java
+@@ -3,9 +3,15 @@ package com.gathin.tvhome;
+ import android.accessibilityservice.AccessibilityService;
+ import android.accessibilityservice.AccessibilityServiceInfo;
+ import android.content.ActivityNotFoundException;
++import android.content.ComponentName;
+ import android.content.Context;
+ import android.content.Intent;
++import android.media.AudioManager;
+ import android.media.tv.TvContract;
++import android.os.Build;
++import android.provider.Settings;
++import android.os.Handler;
++import android.os.Looper;
+ import android.view.KeyEvent;
+ 
+ import java.util.ArrayList;
+@@ -13,7 +19,9 @@ import java.util.Arrays;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.function.Consumer;
+ import java.util.function.ToIntFunction;
++import java.util.regex.Pattern;
+ 
+ /**
+  * Remote buttons that only the stock launcher answered, for InputKeyService and HomeKeyService: app_keys
+@@ -21,14 +29,25 @@ import java.util.function.ToIntFunction;
+  * "KEYCODE_BUTTON_3:com.google.android.youtube.tv", or a scancode as "scan:490:com.wbd.hbomax". A "hold:"
+  * prefix makes an entry the long-press action instead: "hold:KEYCODE_BUTTON_8:org.xbmc.kodi" opens Kodi when
+  * that button is held for HOLD_MS, while the unprefixed entry still opens on a tap; "hold:scan:490:..." does
+- * the same for a scancode. One set of maps for both services; whichever filters the key first consumes it.
+- * A target of "input:<input id>" switches to that TV input (an HDMI port) instead of opening an app.
++ * the same for a scancode. One set of maps for both services; Android hands a key to every service that filters,
++ * so both may call handle() for one event, and it answers each press once.
++ * A target of "input:<input id>" switches to that TV input (an HDMI port) instead of opening an app, a target
++ * of "inputs" opens the input switcher, for a remote whose source button sends a key Android does not map,
++ * one of the action words (back, home, recents, mute, sleep, screensaver, settings, wifi) does that action, and
++ * "package/.Activity" opens that activity rather than the app's launcher entry (an add-on's quick bar, say).
+  */
+ final class RemoteKeys {
+ 
+     /** How long a button is held before its "hold:" entry wins (Android's long-press timeout). */
+     static final long HOLD_MS = 500;
+ 
++    /** The app_keys target that opens the input switcher, as "scan:365:inputs". */
++    static final String INPUTS = "inputs";
++
++    /** Pre-compiled regex patterns to avoid re-compiling Patterns on every entry during key parsing. */
++    private static final Pattern NUMERIC_KEY = Pattern.compile("[0-9]{1,6}");
++    private static final Pattern KEYCODE_KEY = Pattern.compile("KEYCODE_[A-Z0-9_]+");
++
+     private RemoteKeys() { }
+ 
+     /** keycode -> package, with key names resolved by Android. */
+@@ -53,9 +72,9 @@ final class RemoteKeys {
+             if (parts.length != 2 || parts[1].trim().isEmpty()) continue;
+             String key = parts[0].trim();
+             int code;
+-            if (key.matches("[0-9]{1,6}")) {
++            if (NUMERIC_KEY.matcher(key).matches()) {
+                 code = Integer.parseInt(key);
+-            } else if (key.matches("KEYCODE_[A-Z0-9_]+")) {
++            } else if (KEYCODE_KEY.matcher(key).matches()) {
+                 code = names.applyAsInt(key);   // keyCodeFromString takes digits only from API 29, names always
+             } else {
+                 continue;
+@@ -106,7 +125,7 @@ final class RemoteKeys {
+             String[] parts = entry.split(":", 3);
+             if (parts.length != 3 || !parts[0].trim().equals("scan") || parts[2].trim().isEmpty()) continue;
+             String code = parts[1].trim();
+-            if (!code.matches("[0-9]{1,6}")) continue;
++            if (!NUMERIC_KEY.matcher(code).matches()) continue;
+             int scan = Integer.parseInt(code);
+             if (scan > 0) keys.put(scan, parts[2].trim());
+         }
+@@ -129,18 +148,90 @@ final class RemoteKeys {
+         return holds;
+     }
+ 
++    /** Created on first use: building a Handler while the class loads breaks the JVM tests. */
++    private static Presses presses;
++
+     /**
+-     * Consumes a key mapped by either list. On release it opens the hold app after HOLD_MS, otherwise the normal
+-     * one; false means neither list has this key, so the caller can pass it on.
++     * Consumes a key mapped by either list: the hold app opens once the button has been down for HOLD_MS, the
++     * normal one on an earlier release. False means neither list has this key, so the caller can pass it on.
+      */
+     static boolean handle(Context ctx, KeyEvent event, String app, String holdApp) {
+         if (app == null && holdApp == null) return false;
+-        if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+-            launch(ctx, target(app, holdApp, event.getEventTime() - event.getDownTime()));
++        if (presses == null) {
++            Handler handler = new Handler(Looper.getMainLooper());
++            presses = new Presses(new Presses.Timer() {
++                @Override public void post(Runnable hold, long delayMs) { handler.postDelayed(hold, delayMs); }
++                @Override public void cancel(Runnable hold) { handler.removeCallbacks(hold); }
++            });
++        }
++        String button = event.getDeviceId() + ":" + event.getKeyCode() + ":" + event.getScanCode();
++        if (event.getAction() == KeyEvent.ACTION_DOWN) {
++            presses.down(button, event.getEventTime(), event.getRepeatCount(), holdApp, target -> launch(ctx, target));
++        } else if (event.getAction() == KeyEvent.ACTION_UP) {
++            presses.up(button, event.getEventTime(), event.getDownTime(), event.isCanceled(), app, holdApp,
++                    target -> launch(ctx, target));
+         }
+         return true;
+     }
+ 
++    /**
++     * Each button's presses, kept per device, keycode and scancode: KeyEvent.getDownTime() can't tell presses apart,
++     * since a key pressed together with another can report the other's. Both services get every event, so a DOWN
++     * or UP whose event time was already seen for that button is the other service's copy and is skipped. One small
++     * record per mapped button that has been pressed, not a history.
++     */
++    static final class Presses {
++        interface Timer {
++            void post(Runnable hold, long delayMs);
++            void cancel(Runnable hold);
++        }
++
++        private static final class Press {
++            long downAt = -1, upAt = -1;
++            boolean fired;
++            Runnable hold;
++        }
++
++        private final Map<String, Press> buttons = new HashMap<>();
++        private final Timer timer;
++
++        Presses(Timer timer) {
++            this.timer = timer;
++        }
++
++        void down(String button, long eventTime, int repeatCount, String holdApp, Consumer<String> open) {
++            if (repeatCount != 0) return;
++            Press press = buttons.computeIfAbsent(button, b -> new Press());
++            if (press.downAt == eventTime) return;
++            if (press.hold != null) timer.cancel(press.hold);   // its UP never came
++            press.downAt = eventTime;
++            press.fired = false;
++            press.hold = null;
++            if (holdApp == null) return;
++            press.hold = () -> {
++                press.hold = null;
++                press.fired = true;
++                open.accept(holdApp);
++            };
++            timer.post(press.hold, HOLD_MS);
++        }
++
++        void up(String button, long eventTime, long downTime, boolean canceled, String app, String holdApp,
++                Consumer<String> open) {
++            Press press = buttons.computeIfAbsent(button, b -> new Press());
++            if (press.upAt == eventTime) return;
++            boolean sawDown = press.downAt > press.upAt;
++            press.upAt = eventTime;
++            if (press.hold != null) {
++                timer.cancel(press.hold);
++                press.hold = null;
++            }
++            if (canceled || (sawDown && press.fired)) return;
++            // Without its DOWN (the service started while the button was held), the event's own down time will do.
++            open.accept(target(app, holdApp, eventTime - (sawDown ? press.downAt : downTime)));
++        }
++    }
++
+     /** The app a mapped key opens: its hold entry after HOLD_MS, otherwise its normal one. */
+     static String target(String app, String holdApp, long heldMs) {
+         return heldMs >= HOLD_MS && holdApp != null ? holdApp : app;
+@@ -153,10 +244,96 @@ final class RemoteKeys {
+         return id.isEmpty() ? null : id;
+     }
+ 
++    /**
++     * The accessibility global action for an action word, or 0 when the target is something else. "sleep" is
++     * GLOBAL_ACTION_LOCK_SCREEN, which puts a TV in standby (as the Sleep Timer add-on does); Android has it from 28.
++     */
++    static int globalAction(String target, int sdk) {
++        switch (target) {
++            case "back": return AccessibilityService.GLOBAL_ACTION_BACK;
++            case "home": return AccessibilityService.GLOBAL_ACTION_HOME;
++            case "recents": return AccessibilityService.GLOBAL_ACTION_RECENTS;
++            case "sleep": return sdk >= 28 ? AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN : 0;
++            default: return 0;
++        }
++    }
++
++    /** Whether a target is an action word rather than an app or an input. A package name always has a dot. */
++    static boolean isAction(String target) {
++        switch (target) {
++            case "back": case "home": case "recents": case "mute": case "sleep":
++            case "screensaver": case "settings": case "wifi":
++                return true;
++            default:
++                return false;
++        }
++    }
++
++    /** Runs an action word; false for an app or an input. Needs no permission the launcher does not already have. */
++    private static boolean runAction(Context ctx, String target) {
++        if (!isAction(target)) return false;
++        int global = globalAction(target, Build.VERSION.SDK_INT);
++        if (global != 0) {
++            if (ctx instanceof AccessibilityService) ((AccessibilityService) ctx).performGlobalAction(global);
++            return true;
++        }
++        switch (target) {
++            case "mute":
++                // The media stream a TV plays everything on, with its own volume bar, as a remote's mute button would.
++                AudioManager audio = ctx.getSystemService(AudioManager.class);
++                if (audio != null) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
++                        AudioManager.ADJUST_TOGGLE_MUTE, AudioManager.FLAG_SHOW_UI);
++                break;
++            case "screensaver":
++                // The screensaver chosen in the TV's settings, through the system's "start now" shortcut; the
++                // launcher's own clock where the firmware has no such shortcut.
++                Intent dream = new Intent(Intent.ACTION_MAIN)
++                        .setClassName("com.android.systemui", "com.android.systemui.Somnambulator");
++                if (ctx.getPackageManager().resolveActivity(dream, 0) == null) dream = new Intent(ctx, ClockActivity.class);
++                start(ctx, dream);
++                break;
++            case "settings":
++                start(ctx, SystemSettings.intent(ctx, Settings.ACTION_SETTINGS));
++                break;
++            case "wifi":
++                start(ctx, SystemSettings.intent(ctx, Settings.ACTION_WIFI_SETTINGS));
++                break;
++            default:
++                break;   // "sleep" below Android 9: consumed, nothing to do
++        }
++        return true;
++    }
++
++    private static void start(Context ctx, Intent intent) {
++        try {
++            ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
++        } catch (ActivityNotFoundException | SecurityException ignored) {
++        }
++    }
++
++    /**
++     * True for a "package/.Activity" target. An input id has slashes too, and ComponentName.unflattenFromString()
++     * would read "input:com.tcl.tvinput" as its package, so an "input:" target never counts.
++     */
++    static boolean isActivity(String target) {
++        return target != null && inputId(target) == null && target.indexOf('/') > 0;
++    }
++
+     /** Opens an app from a remote button: its TV entry if it has one, else its phone entry. An "input:<id>" target
+-     *  switches to that TV input (an HDMI port) instead. */
++     *  switches to that TV input (an HDMI port) instead, an action word runs that action, and a
++     *  "package/.Activity" target opens that activity. */
+     static void launch(Context ctx, String pkg) {
+-        if (pkg == null) return;
++        if (pkg == null || runAction(ctx, pkg)) return;
++        if (INPUTS.equals(pkg)) {
++            // This launcher's own Inputs menu, as InputsRequestActivity opens it: addressed to Home directly, so a
++            // vendor input picker that also answers VIEW_INPUTS never turns it into a chooser.
++            try {
++                ctx.startActivity(new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_VIEW_INPUTS)
++                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
++            } catch (ActivityNotFoundException ignored) {
++            }
++            return;
++        }
+         String inputId = inputId(pkg);
+         if (inputId != null) {
+             // The same passthrough URI the Inputs menu opens, which the Live TV app handles.
+@@ -170,6 +347,14 @@ final class RemoteKeys {
+             }
+             return;
+         }
++        ComponentName activity = isActivity(pkg) ? ComponentName.unflattenFromString(pkg) : null;
++        if (activity != null) {
++            try {
++                ctx.startActivity(new Intent().setComponent(activity).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
++            } catch (ActivityNotFoundException | SecurityException ignored) {
++            }
++            return;
++        }
+         Intent open = ctx.getPackageManager().getLeanbackLaunchIntentForPackage(pkg);
+         if (open == null) open = ctx.getPackageManager().getLaunchIntentForPackage(pkg);
+         if (open == null) return;
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/ServiceRepair.java b/launcher/app/src/main/java/com/gathin/tvhome/ServiceRepair.java
+index 8465d069..8ee8afd8 100644
+--- a/launcher/app/src/main/java/com/gathin/tvhome/ServiceRepair.java
++++ b/launcher/app/src/main/java/com/gathin/tvhome/ServiceRepair.java
+@@ -10,6 +10,7 @@ import android.provider.Settings;
+ 
+ import java.util.ArrayList;
+ import java.util.List;
++import java.util.Objects;
+ 
+ /**
+  * Android takes an app's accessibility services off the enabled list when the app is force-stopped (Settings, a
+@@ -46,23 +47,60 @@ final class ServiceRepair {
+                     if (name != null) enabled.add(name);
+                 }
+             }
+-            StringBuilder updated = new StringBuilder(list == null || list.equals("null") ? "" : list);
+-            boolean missing = false;
++            List<ComponentName> recorded = new ArrayList<>();
+             for (String service : prefs(context).getAll().keySet()) {
+-                ComponentName name = new ComponentName(context.getPackageName(), service);
+-                if (enabled.contains(name)) continue;
++                recorded.add(new ComponentName(context.getPackageName(), service));
++            }
++            if (recorded.isEmpty()) return;
++            // The list without our recorded helpers, then with all of them.
++            StringBuilder others = new StringBuilder();
++            for (ComponentName name : enabled) {
++                if (recorded.contains(name)) continue;
++                if (others.length() > 0) others.append(':');
++                others.append(name.flattenToShortString());
++            }
++            StringBuilder updated = new StringBuilder(others);
++            boolean missing = false;
++            for (ComponentName name : recorded) {
++                if (!enabled.contains(name)) missing = true;
+                 if (updated.length() > 0) updated.append(':');
+                 updated.append(name.flattenToShortString());
+-                missing = true;
+             }
+             if (!missing) return;
+-            Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, updated.toString());
+-            Settings.Secure.putInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 1);
++            // A killed helper also lands on Android's "Crashed services" list (dumpsys accessibility), and a
++            // crashed service is never bound again, so putting it back on the list alone binds nothing and the
++            // switch falls back to 0 (Hisense songshan, Android 11, whose standby kills third-party apps). Android
++            // drops the crashed mark when it sees the helper leave the enabled list, so add, remove, add: after a
++            // force stop the list is already empty, and a removal that changes nothing is not seen. Off the main
++            // thread, so Home does not wait for the pauses. Each write first checks the list still reads what the
++            // previous step left, and the cycle stops otherwise: a service turned on or off during a pause stays
++            // that way instead of being overwritten by a snapshot.
++            final String without = others.toString();
++            final String with = updated.toString();
++            new Thread(() -> {
++                try {
++                    if (!replaceList(cr, list, with)) return;
++                    Thread.sleep(1000);
++                    if (!replaceList(cr, with, without)) return;
++                    Thread.sleep(1000);
++                    if (!replaceList(cr, without, with)) return;
++                    Settings.Secure.putInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 1);
++                } catch (RuntimeException | InterruptedException ignored) {
++                    // The setting is the system's; a refusal leaves the helper off, as before.
++                }
++            }, "ServiceRepair").start();
+         } catch (RuntimeException ignored) {
+             // The setting is the system's; a refusal leaves the helper off, as before.
+         }
+     }
+ 
++    /** Writes the enabled list only while it still reads {@code expected}; an absent list counts as empty. */
++    private static boolean replaceList(ContentResolver cr, String expected, String updated) {
++        String now = Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
++        return Objects.equals(now == null ? "" : now, expected == null ? "" : expected)
++                && Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, updated);
++    }
++
+     private static SharedPreferences prefs(Context context) {
+         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+     }
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/Sleep.java b/launcher/app/src/main/java/com/gathin/tvhome/Sleep.java
 new file mode 100644
 index 00000000..c1142d64
@@ -680,10 +1165,10 @@ index 00000000..c1142d64
 +}
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/SleepService.java b/launcher/app/src/main/java/com/gathin/tvhome/SleepService.java
 new file mode 100644
-index 00000000..1f2a572f
+index 00000000..0dd5109e
 --- /dev/null
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/SleepService.java
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,47 @@
 +package com.gathin.tvhome;
 +
 +import android.accessibilityservice.AccessibilityService;
@@ -698,6 +1183,7 @@ index 00000000..1f2a572f
 +public class SleepService extends AccessibilityService {
 +
 +    private static SleepService running;
++    private boolean repairRecord;
 +
 +    /** True when the TV went to standby; false when the service is not enabled. */
 +    static boolean lock() {
@@ -706,12 +1192,19 @@ index 00000000..1f2a572f
 +
 +    @Override
 +    protected void onServiceConnected() {
++        super.onServiceConnected();
 +        running = this;
++        try {
++            repairRecord = Config.load(this).restoreKeyServices;
++            if (repairRecord) ServiceRepair.connected(this, getClass());
++        } catch (Throwable ignored) {
++        }
 +    }
 +
 +    @Override
 +    public boolean onUnbind(Intent intent) {
 +        running = null;
++        if (repairRecord) ServiceRepair.disconnected(this, getClass());
 +        return super.onUnbind(intent);
 +    }
 +
@@ -1164,7 +1657,7 @@ index e83b7f93..0c8870dc 100644
 +    <bool name="show_weather">true</bool>
  </resources>
 diff --git a/launcher/app/src/main/res/values/config.xml b/launcher/app/src/main/res/values/config.xml
-index f600676d..099efffb 100644
+index f600676d..b17fdc29 100644
 --- a/launcher/app/src/main/res/values/config.xml
 +++ b/launcher/app/src/main/res/values/config.xml
 @@ -17,10 +17,11 @@
@@ -1182,7 +1675,19 @@ index f600676d..099efffb 100644
      </string-array>
      <!-- With fewer dock_apps than columns (or a dock app that is not installed), the free dock slots take
           the first grid apps, so the dock never shows a gap. false leaves them empty (#162); a theme can
-@@ -61,12 +62,18 @@
+@@ -31,6 +32,11 @@
+     <string-array name="hidden_apps">
+         <item>com.mediatek.wwtv.tvcenter</item>
+         <item>com.mitv.gallery</item>
++        <item>com.vt.tv.tvcenter</item>
++        <item>com.tcl.dashboard</item>
++        <item>com.tcl.partnercustomizer</item>
++        <item>com.tcl.suspension</item>
++        <item>com.tcl.gallery</item>
+     </string-array>
+ 
+     <!-- The TV's Live TV / tuner app, offered at the end of the Inputs menu. Leave empty to omit. -->
+@@ -61,12 +67,18 @@
  
      <!-- A tile's name instead of the app's own: "package=Name". It also shows above the dock. -->
      <string-array name="app_labels">
@@ -1201,7 +1706,16 @@ index f600676d..099efffb 100644
      <!-- TVs with no TvInputManager have no HDMI list to read, but their own source-selection panel
           still switches inputs (TCL Android TV 9 again). When nothing could be listed, the Inputs menu
           offers one row that starts this service: component first, then action. The component can also be an
-@@ -201,13 +208,13 @@
+@@ -135,7 +147,7 @@
+          off the enabled list. true: Home puts the helpers that were running back when it starts; one turned off in
+          Settings stays off. Needs WRITE_SECURE_SETTINGS, which build-and-install grants with RESTORE_KEY_SERVICES=1
+          (-RestoreKeyServices on Windows). Can also be set with "restore_key_services": true in a theme's config.json. -->
+-    <bool name="restore_key_services">false</bool>
++    <bool name="restore_key_services">true</bool>
+ 
+     <!-- More remote buttons that open the input switcher, by Android keycode (INPUT_KEY_SERVICE=1
+          build-and-install.sh; KEYCODE_TV always does). For buttons only a disabled app answered: the Xiaomi
+@@ -201,13 +213,13 @@
      <!-- The dock band's padding equals the gap between its tiles on all four sides (as far as the grid's edges leave room),
           so its corners are concentric with the tiles' and the spacing reads even. false (the default) keeps the fixed
           14dp above and below, up to 22dp at the sides and 26dp corners. Can also be set with "dock_even_padding": true in a theme's config.json. -->
@@ -1217,7 +1731,7 @@ index f600676d..099efffb 100644
      <!-- The Inputs pill as a round icon button too (the label moves to the talkback description). -->
      <bool name="icon_only_inputs">false</bool>
      <!-- The app library as a round button in the top bar, beside Settings (app_library must be on too). -->
-@@ -235,7 +242,7 @@
+@@ -235,7 +247,7 @@
      <!-- Hold OK on a tile opens a small menu: Move (picks the tile up for reordering), Remove from Home (only with
           app_library) and App info. false keeps the old behaviour: holding OK opens the app's App info page.
           Can also be set with "tile_menu": true in a theme's config.json. -->
@@ -1226,7 +1740,7 @@ index f600676d..099efffb 100644
  
      <!-- Grid rows left visible under the dock on the home screen. 0 = dock sits at the very bottom. Tiles shrink if
           the dock, its title and this many rows would not otherwise fit the screen height. -->
-@@ -247,7 +254,7 @@
+@@ -247,7 +259,7 @@
  
      <!-- Tiles per row in the grid; the dock always has this many slots. Tiles are 180dp wide at 4 columns and
           shrink to fit from 5 up (about 144dp at 5, 117dp at 6 on a 1080p TV). -->

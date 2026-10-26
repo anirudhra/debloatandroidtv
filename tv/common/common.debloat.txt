@@ -10,6 +10,10 @@ android.autoinstalls.config.google.gtvpai
 com.google.android.partnersetup
 com.google.android.feedback
 com.android.tv.feedbackconsent
+com.google.android.tv.remotecontrol.logging
+com.android.adservices.api
+com.android.ondevicepersonalization.services
+com.android.federatedcompute.services
 com.android.printspooler
 com.google.android.syncadapters.calendar
 com.android.providers.calendar

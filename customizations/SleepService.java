@@ -12,6 +12,7 @@ import android.view.accessibility.AccessibilityEvent;
 public class SleepService extends AccessibilityService {
 
     private static SleepService running;
+    private boolean repairRecord;
 
     /** True when the TV went to standby; false when the service is not enabled. */
     static boolean lock() {
@@ -20,12 +21,19 @@ public class SleepService extends AccessibilityService {
 
     @Override
     protected void onServiceConnected() {
+        super.onServiceConnected();
         running = this;
+        try {
+            repairRecord = Config.load(this).restoreKeyServices;
+            if (repairRecord) ServiceRepair.connected(this, getClass());
+        } catch (Throwable ignored) {
+        }
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
         running = null;
+        if (repairRecord) ServiceRepair.disconnected(this, getClass());
         return super.onUnbind(intent);
     }
 

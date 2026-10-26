@@ -8,10 +8,15 @@
 #
 # IMPORTANT SAFETY FOR ONN / AMLOGIC:
 # Do NOT disable:
-#   - com.droidlogic.*               (Amlogic display & audio hardware drivers)
-#   - com.google.android.tv.frameworkpackagestubs (Core TV stubs)
-#   - com.google.android.apps.mediashell (Google Cast / Chromecast built-in)
-#   - com.android.bluetooth          (Bluetooth remote connection)
+#   - com.droidlogic.*                             (Amlogic display, HDMI, picture & remote drivers)
+#   - com.gretzky.GlobalKey                        (Onn remote dedicated app button router)
+#   - com.gretzky.hwinfo                           (Hardware info service)
+#   - com.onn.bluetoothconnect                     (Bluetooth remote pairing helper)
+#   - com.onn.updatenotification                   (System OTA update notifications)
+#   - com.google.android.tv.dfuservice             (Remote control firmware updates)
+#   - com.google.android.tv.frameworkpackagestubs  (Core TV stubs)
+#   - com.google.android.apps.mediashell           (Google Cast / Chromecast built-in)
+#   - com.android.bluetooth                        (Bluetooth remote connection)
 
 # --- Optional Preinstalled Streaming Apps (Uncomment to disable if not used) ---
 # com.netflix.ninja

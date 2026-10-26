@@ -772,8 +772,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         setIntent(new Intent(Intent.ACTION_MAIN));
         if (btnInputs.getVisibility() != View.VISIBLE) return true;
         if (btnInputs.isLaidOut()) {
-            btnInputs.requestFocus();
-            showInputs();
+            // Android 9 delivers a new intent to a paused activity with a brief resume and pause around it, and
+            // onPause() closes popups, so open the menu once that turn on the main thread is over (#1688).
+            btnInputs.post(() -> {
+                if (isFinishing() || btnInputs.getVisibility() != View.VISIBLE) return;
+                btnInputs.requestFocus();
+                showInputs();
+            });
             return true;
         }
         // Cold start: the popup anchors to the pill, so wait for the first layout.
@@ -2661,6 +2666,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      *  throws SecurityException, which used to take Home down with it (YaOS before the manifest asked
      *  for ACCESS_TV_SOURCE). */
     private void openInput(String inputId) {
+        TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
+        if (tim != null) {
+            try {
+                TvInputInfo info = tim.getTvInputInfo(inputId);
+                if (info != null && info.getParentId() != null) {
+                    inputId = info.getParentId();
+                }
+            } catch (Throwable ignored) {
+            }
+        }
         Integer source = mappedSource(inputId);
         if (source != null && source >= 0 && !inputAction.isEmpty()) {
             try {
@@ -2676,6 +2691,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 ? new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "vnd.android.cursor.item/channel")
                 : new Intent(Intent.ACTION_VIEW, uri.buildUpon().scheme(inputUriScheme).build()))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        // Aim it at the TV app first: apps installed later (a streaming app, a file manager) can claim the same
+        // channel URI too, and with two or more handlers Android shows a chooser instead of the input.
+        if (!liveTvPkg.isEmpty()) {
+            try {
+                startActivity(new Intent(view).setPackage(liveTvPkg));
+                return;
+            } catch (ActivityNotFoundException | SecurityException ignored) {
+            }
+        }
         try {
             startActivity(view);
             return;

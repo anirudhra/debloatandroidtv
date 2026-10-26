@@ -19,7 +19,8 @@ COLUMNS=5
 APP_KEYS=190:io.gh.reisxd.tizentube.cobalt
 
 # --- Reserved / Unmapped Onn G10 Remote Buttons ---
-# TV / Live TV button: keyCode 170 (or 165)
+# TV / Live TV button: keyCode 170 (or KEYCODE_MACRO_1 / 313)
+# Profile button:      keyCode 288 (KEYCODE_PROFILE_SWITCH)
 # Netflix button:      keyCode 191
 # Disney+ button:      keyCode 192
 # Paramount+ button:   keyCode 193

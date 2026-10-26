@@ -32,6 +32,12 @@ if [ ! -d "$TARGET_DIR" ]; then
 fi
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
 
+# Pin to tested lightweight upstream base commit by default so upstream Config/Settings churn doesn't break compilation
+UPSTREAM_COMMIT="${UPSTREAM_COMMIT:-30626a8e}"
+if [ -d "$TARGET_DIR/.git" ] && [ -n "$UPSTREAM_COMMIT" ]; then
+    git -C "$TARGET_DIR" checkout "$UPSTREAM_COMMIT" >/dev/null 2>&1 || true
+fi
+
 echo "Applying customizations to '$TARGET_DIR'..."
 
 # Ensure target directories exist
@@ -48,6 +54,9 @@ cp "$CUSTOM_DIR/MainActivity.java" "$TARGET_DIR/launcher/app/src/main/java/com/g
 cp "$CUSTOM_DIR/Config.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/HomeKeyService.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/AppAdapter.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
+cp "$CUSTOM_DIR/AppLaunchActivity.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
+cp "$CUSTOM_DIR/RemoteKeys.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
+cp "$CUSTOM_DIR/ServiceRepair.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/Sleep.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/SleepService.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"
 cp "$CUSTOM_DIR/Weather.java" "$TARGET_DIR/launcher/app/src/main/java/com/gathin/tvhome/"

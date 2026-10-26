@@ -23,8 +23,11 @@ debloatandroidtv/
 │   └── tvhome.apk          # Pre-compiled customized launcher APK (ready to deploy)
 ├── customizations/         # Unified launcher customizations & assets
 │   ├── launcher.patch      # Full binary git patch against upstream CleanYourTV
-│   ├── MainActivity.java   # Ambient glow, Control Center, Hotplug & Pixel Drift logic
+│   ├── MainActivity.java   # Ambient glow, Control Center, CEC/HDMI & Pixel Drift logic
 │   ├── AppAdapter.java     # Move mode (hold OK to reorder, App Info, Reset order)
+│   ├── AppLaunchActivity.java # Handles market://launch?id=<pkg> when launcherx is disabled
+│   ├── RemoteKeys.java     # Remote key action words, activity/input targets & hold deduplication
+│   ├── ServiceRepair.java  # Crashed accessibility service recovery (add -> remove -> add cycle)
 │   ├── Sleep.java          # Sleep timer cycle (30/60/90m) & standby executor
 │   ├── SleepService.java   # Standby accessibility service (GLOBAL_ACTION_LOCK_SCREEN)
 │   ├── Weather.java        # Open-Meteo live weather client with WMO emoji mapper
@@ -166,8 +169,10 @@ Once the script finishes:
    ```
 
 > [!NOTE]
-> **Wi-Fi Credential Safety Guard:**  
-> If your TV was originally set up using the Google TV setup wizard, the Wi-Fi credentials are owned by `com.google.android.tungsten.setupwraith`. `setup.sh` dynamically inspects `dumpsys wifi` and will automatically **skip** disabling `setupwraith` if it owns your active Wi-Fi profile, preventing accidental Wi-Fi credential deletion and lost network connectivity.
+> **Built-in Hardware & Network Safety Guards:**  
+> * **Wi-Fi Credential Guard (`setupwraith`):** If your TV was set up using the Google TV wizard, Wi-Fi credentials may be owned by `com.google.android.tungsten.setupwraith`. `setup.sh` dynamically inspects `dumpsys wifi` and skips disabling `setupwraith` if it owns any saved Wi-Fi profile (you can forget and re-join Wi-Fi in Settings first to transfer ownership to `com.android.tv.settings`).
+> * **HDMI Input & Settings Handler Guard:** `setup.sh` and `tools/check.py` query Android's package manager for active channel (`vnd.android.cursor.item/channel`) and `android.settings.SETTINGS` handlers, refusing to disable packages needed to open HDMI inputs or System Settings.
+> * **TCL `TclAppBoot` Persistence:** On TCL G08/G10 firmware (Q6C / QM6), TCL's boot manager blocks accessibility services on reboot unless `AUTO_START` / `APP_AUTO_START` is granted and flushed to disk. `setup.sh` automatically grants `WRITE_SECURE_SETTINGS`, `AUTO_START`, and `APP_AUTO_START` and runs `appops write-settings`.
 
 > [!NOTE]
 > **After System OTA Updates or Factory Reset:**  
@@ -239,8 +244,10 @@ SETTINGS_KEYCODES=83
 # Optional: Keycodes that open Input Switcher
 # INPUT_KEYCODES=178
 
-# Optional: Dedicated App Buttons (format: KEYCODE:PACKAGE or KEYCODE_NAME:PACKAGE)
-# APP_KEYS=190:com.google.android.youtube.tv
+# Optional: Dedicated App / Action / Input Buttons
+# Supports package names, package/.Activity, input:<id>, or action words (mute, sleep, screensaver, inputs, settings, wifi)
+# Prefix with hold: for long-press actions (e.g. hold:190:sleep)
+# APP_KEYS=190:io.gh.reisxd.tizentube.cobalt
 # APP_KEYS=191:com.netflix.ninja
 ```
 
@@ -255,16 +262,22 @@ SETTINGS_KEYCODES=83
 
 ## Advanced Feature: Background Lockdown (`lockdown:`)
 
-Certain OEM services trigger Android System Recovery if disabled using `pm disable-user` (e.g. `com.vt.tv.smartsense` and `com.vt.tv.aiot` on Hisense MediaTek firmware).
+Certain OEM services trigger Android System Recovery or logcat errors if disabled using `pm disable-user`:
+* **Hisense U7N / U75 (`hengshan` / `huangshan`):** Disabling `com.vt.tv.smartsense*` or `com.vt.tv.aiot*` triggers Android Recovery on reboot.
+* **TCL Q6C / QM6 (`G08`):** `com.tcl.ttvs` hosts `SystemUpdateActivity` (OTA firmware updates) alongside Samba TV ACR, and `com.tcl.interactive` is bound by `com.tcl.tv` for source overlays (disabling both causes a 10 Hz NPE logcat storm on some G08 builds).
 
-To silence these services safely without bricking or triggering recovery, prefix them with `lockdown:` in your debloat list:
+To silence their background telemetry and CPU usage safely without breaking OTA updates, source overlays, or boot stability, prefix them with `lockdown:` in your debloat list:
 
 ```text
 # --- Background Lockdown (Starve Background CPU, Do Not Disable) ---
 lockdown:com.vt.tv.smartsense
 lockdown:com.vt.tv.smartsense.ui
 lockdown:com.vt.tv.aiot
+lockdown:com.vt.tv.aiotprotocolapp
+lockdown:com.vt.tv.aiotsystemservice
 lockdown:com.vt.tv.ai_sense
+lockdown:com.tcl.ttvs
+lockdown:com.tcl.interactive
 ```
 
 `setup.sh` automatically uses Android AppOps policies (`RUN_ANY_IN_BACKGROUND ignore` and `RUN_IN_BACKGROUND ignore`) to deny background CPU cycles and stop the services from running, keeping your system 100% stable.

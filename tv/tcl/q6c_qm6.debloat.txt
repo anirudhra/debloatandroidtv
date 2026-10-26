@@ -6,28 +6,43 @@
 # Safe to disable with:
 #   adb shell pm disable-user --user 0 <package>
 #
-# IMPORTANT SAFETY FOR TCL:
+# IMPORTANT SAFETY FOR TCL (G08 / BeyondTV / MediaTek):
 # Do NOT disable:
-#   - com.tcl.tv              (Live TV player)
-#   - com.tcl.tvinput         (HDMI and tuner inputs)
-#   - com.tcl.dashboard       (Quick settings & picture mode overlay)
-#   - com.tcl.providers.config(CRITICAL: disabling this drops Wi-Fi on TCL!)
-#   - com.tcl.initsetup       (System boot requirements)
-#   - com.tcl.autopair        (Bluetooth remote control pairing)
+#   - com.tcl.tv                           (Live TV & HDMI player)
+#   - com.tcl.tvinput                      (HDMI and tuner input services)
+#   - com.tcl.suspension                   (Quick Panel source menu on the Input key)
+#   - com.tcl.dashboard                    (Quick settings & picture mode overlay)
+#   - com.tcl.providers.config             (CRITICAL: disabling this drops Wi-Fi on TCL!)
+#   - com.tcl.initsetup                    (CRITICAL: required for Wi-Fi & boot stability)
+#   - com.tcl.factory.view                 (CRITICAL: disabling drops Wi-Fi on AU14/AU16 firmware)
+#   - com.tcl.autopair                     (Bluetooth remote control pairing across battery changes)
+#   - com.tcl.inputmethod.international    (Default keyboard IME unless Gboard is set first)
+#
+# Note on com.tcl.ttvs & com.tcl.interactive:
+# On some G08 Q6C/Q7C builds, com.tcl.ttvs hosts SystemUpdateActivity (OTA firmware updates)
+# and com.tcl.interactive is bound by com.tcl.tv for source overlays (disabling both with
+# pm disable-user can cause a 10 Hz NPE logcat storm on AU02/AS35 firmware). Using `lockdown:`
+# starves their background CPU/telemetry while keeping OTA and source bindings intact:
 
-# --- TCL Telemetry, Tracking & Analytics ---
-com.tcl.ttvs                           # Samba TV ACR viewing tracking, TCL "BI" analytics, Alexa core
+# --- TCL Background Lockdown (Starve Background Telemetry, Preserve OTA & Source Overlays) ---
+lockdown:com.tcl.ttvs                  # Samba TV ACR viewing tracking, TCL "BI" analytics, Alexa core
+lockdown:com.tcl.interactive           # TCL TIAS interactive ad/overlay service
+
+# --- TCL Telemetry, Tracking & Account Nags ---
 com.tcl.logkit                         # System log capture and telemetry upload
 com.tcl.usercenter                     # TCL account sign-in nag popups
+com.tcl.guard                          # TCL background "app manager" / cleaner service at boot
+com.tcl.eva                            # TCL voice assistant background layer (camera/BI permissions)
 
 # --- TCL Ads, Promo Banners & Push Messages ---
 com.tcl.tv.plus                        # TCL TV+ promo content
 com.tcl.channelplus                    # TCL FAST live streaming channels
+com.tcl.waterfall.overseas             # TCL Channel content waterfall / movie promo pages
 com.tcl.tv.tclhome_passive             # Pushes promo cards to home screen at boot
 com.tcl.partnercustomizer              # Injects partner promos into Google TV home rows
-com.tcl.interactive                    # TCL TIAS interactive ad service
 com.tcl.smartlink.core                 # Background push / silent installer helper
 com.tcl.messagebox                     # TCL promo notifications and system banners
+com.tcl.magiconnectfree                # T-Cast / MagiConnect pairing promo
 
 # --- Store / Retail Demo Modes ---
 com.tcl.exhibit
@@ -39,3 +54,5 @@ com.tcl.ocean.instructions             # E-manual viewer
 com.tcl.repairguide                    # Repair guide
 com.tcl.browser                        # TCL stock web browser
 com.tcl.smartalexa                     # Alexa integration
+com.tcl.t_solo                         # Bluetooth "listen alone" promo helper
+com.tcl.hearaid                        # Hearing test promo app

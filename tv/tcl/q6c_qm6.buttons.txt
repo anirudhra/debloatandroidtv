@@ -18,14 +18,18 @@ COLUMNS=5
 # YouTube button (TCL remote standard keyCode 190) -> TizenTube
 APP_KEYS=190:io.gh.reisxd.tizentube.cobalt
 
-# Prime Video button (TCL remote standard keyCode 195) -> Prime Video
+# Prime Video button (standard TCL keyCode 195 + G08 RC902V/RC933 keyCode 4099) -> Prime Video
 APP_KEYS=195:com.amazon.amazonvideo.livingroom
+APP_KEYS=4099:com.amazon.amazonvideo.livingroom
 
 # --- Reserved / Unmapped TCL Remote Buttons ---
-# Netflix button:      keyCode 191 (or 241)
-# TCL Channel button:  keyCode 200 (or 192)
+# Netflix button:      keyCode 4062 (G08 RC902V/RC933) or 191 / 241
+# TCL Channel button:  keyCode 4020 (G08 RC902V/RC933) or 200 / 192
+# Extra app buttons:   keyCode 4057, 4141 (G08), 4065 (G09 YouTube)
 # Guide button:        keyCode 165 (or 172)
+# Input button:        keyCode 178 (KEYCODE_TV_INPUT - handled natively by com.tcl.suspension)
 #
 # Example future mappings:
+# APP_KEYS=4062:com.netflix.ninja
 # APP_KEYS=191:com.netflix.ninja
-# APP_KEYS=200:com.tcl.tv
+# APP_KEYS=4020:com.tcl.tv

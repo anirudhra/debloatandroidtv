@@ -262,6 +262,7 @@ ensure_connected() {
 parse_buttons_file() {
     local file="$1"
     local panel="true"
+    local key_filter="true"
     local temp_unit="celsius"
     local columns=5
     local -a settings_keycodes=()
@@ -283,6 +284,13 @@ parse_buttons_file() {
                     panel="false"
                 else
                     panel="true"
+                fi
+                ;;
+            key_filter)
+                if [[ "$val" =~ ^(false|0|no)$ ]]; then
+                    key_filter="false"
+                else
+                    key_filter="true"
                 fi
                 ;;
             settings_key|settings_keys|settings_keycode|settings_keycodes)
@@ -335,6 +343,8 @@ parse_buttons_file() {
     cat <<EOF
 {
   "settings_key_panel": $panel,
+  "restore_key_services": true,
+  "key_filter": $key_filter,
   "settings_key_keycodes": $sk_json,
   "settings_key_scancodes": $ss_json,
   "input_key_keycodes": $ik_json,
@@ -364,8 +374,12 @@ push_buttons_config() {
     adb -s "$target" shell "mkdir -p $remote_dir 2>/dev/null; cp $remote_tmp $remote_dir/config.json 2>/dev/null || content write --uri content://com.gathin.tvhome.theme/config.json < $remote_tmp; rm -f $remote_tmp" >/dev/null 2>&1
     rm -f "$tmp_file"
 
-    # Reload launcher & accessibility services
+    # Reload launcher & accessibility services (granting TCL TclAppBoot AUTO_START & WRITE_SECURE_SETTINGS)
     adb -s "$target" shell '
+        pm grant com.gathin.tvhome android.permission.WRITE_SECURE_SETTINGS 2>/dev/null || true
+        cmd appops set com.gathin.tvhome AUTO_START allow 2>/dev/null || true
+        cmd appops set com.gathin.tvhome APP_AUTO_START allow 2>/dev/null || true
+        appops write-settings 2>/dev/null || true
         cur=$(settings get secure enabled_accessibility_services)
         [ "$cur" = "null" ] && cur=""
         # Purge any switchaccess/talkback/flar2 that hijack remote buttons
@@ -530,7 +544,7 @@ do_discover() {
     echo "Total packages on device: $TOTAL_COUNT"
 
     # Protected core components regex (never suggest disabling)
-    PROTECTED_REGEX='^(android|com\.android\.(systemui|settings|packageinstaller|permissioncontroller|shell|inputmethod\..*|providers\.settings|providers\.media|providers\.downloads)|com\.google\.android\.(gms|gsf|vending|inputmethod\..*|tv\.remote\.service)|com\.tcl\.(tv|tvinput|dashboard|suspension|autopair|systemserver|providers\.config|initsetup|useragreement|globalkeyoverlay|systemui\.plugin|factory\.view)|com\.vt\.(tv\.tvcenter|tv\.input|source\..*|avmiddleware|tvplayer|eula|udpserver)|com\.mediatek\..*)$'
+    PROTECTED_REGEX='^(android|com\.android\.(systemui|settings|packageinstaller|permissioncontroller|shell|inputmethod\..*|providers\.settings|providers\.media|providers\.downloads|bluetooth)|com\.google\.android\.(gms|gsf|vending|inputmethod\..*|tv\.remote\.service|tv\.dfuservice|tv\.frameworkpackagestubs)|com\.tcl\.(tv|tvinput|dashboard|suspension|autopair|systemserver|providers\.config|initsetup|useragreement|globalkeyoverlay|systemui\.plugin|factory\.view|inputmethod\..*)|com\.vt\.(tv\.tvcenter|tv\.input|source\..*|avmiddleware|tvplayer|eula|udpserver|tv\.smartsense.*|tv\.aiot.*|tv\.ai_sense)|com\.gretzky\..*|com\.onn\.(bluetoothconnect|updatenotification)|com\.droidlogic\..*|com\.mediatek\..*)$'
 
     # Candidate regex for telemetry, ads, tracking, bloatware
     CANDIDATE_REGEX='(^|\.)(ads?|adservice|advert|advertising|analytics|metrics?|telemetry|tracking|tracker|crash|logger|logging|promo|weblab|experiment|abtest|attribution|referrer|recommendations?|suggestions?|storemode|hotel|b2b|protector|alexa|interactive|ginga)(\.|$)'
@@ -671,7 +685,7 @@ do_verify() {
     # 4. Background Starvation (AppOps)
     echo -n "[4/$TOTAL_CHECKS] Checking Background Process Starvation... "
     STARVED_FOUND=0
-    for pkg in "com.vt.tv.smartsense" "com.vt.tv.aiot"; do
+    for pkg in "com.vt.tv.smartsense" "com.vt.tv.aiot" "com.tcl.ttvs" "com.tcl.interactive"; do
         OP_STATE="$(adb -s "$TARGET" shell "appops get $pkg RUN_ANY_IN_BACKGROUND 2>/dev/null" | tr -d '\r' || true)"
         if [[ "$OP_STATE" == *"ignore"* ]] || [[ "$OP_STATE" == *"deny"* ]]; then
             STARVED_FOUND=$((STARVED_FOUND + 1))
@@ -799,6 +813,11 @@ do_apply() {
     DISABLED_COUNT=0
     STARVED_COUNT=0
 
+    # Query active HDMI/input channel handlers and Settings handlers once (upstream handler guard)
+    INPUT_HANDLERS="$(adb -s "$TARGET" shell "cmd package query-activities --brief -a android.intent.action.VIEW -t vnd.android.cursor.item/channel" 2>/dev/null | tr -d '\r' | sed -n 's|^[[:space:]]*\([A-Za-z0-9_.]*\)/.*|\1|p' || true)"
+    SETTINGS_HANDLERS="$(adb -s "$TARGET" shell "cmd package query-activities --brief -a android.settings.SETTINGS" 2>/dev/null | tr -d '\r' | sed -n 's|^[[:space:]]*\([A-Za-z0-9_.]*\)/.*|\1|p' || true)"
+    WIFI_OWNERS="$(adb -s "$TARGET" shell "dumpsys wifi" 2>/dev/null | grep -o 'cname=[^ ]*' || true)"
+
     apply_debloat_file() {
         local file="$1"
         local target="$2"
@@ -809,10 +828,8 @@ do_apply() {
             [ -z "$pkg" ] && continue
 
             if [[ "$pkg" == "com.google.android.tungsten.setupwraith" ]]; then
-                # Safety check: if setupwraith owns the active Wi-Fi network, disabling it deletes the network!
-                local wifi_owners
-                wifi_owners="$(adb -s "$target" shell "dumpsys wifi" 2>/dev/null | grep -o 'cname=[^ ]*' || true)"
-                if echo "$wifi_owners" | grep -q "setupwraith"; then
+                # Safety check: if setupwraith owns a saved Wi-Fi network, disabling it deletes the network!
+                if echo "$WIFI_OWNERS" | grep -q "setupwraith"; then
                     echo "  [SAFETY GUARD] Skipping $pkg: saved Wi-Fi network belongs to it."
                     continue
                 fi
@@ -826,6 +843,17 @@ do_apply() {
                 adb -s "$target" shell "am force-stop $target_pkg" </dev/null >/dev/null 2>&1 || true
                 STARVED_COUNT=$((STARVED_COUNT + 1))
             else
+                # Safety check: never disable the TV's HDMI/AV channel handler or System Settings handler
+                if [ -z "${HANDLERS_ALLOW:-}" ]; then
+                    if echo "$INPUT_HANDLERS" | grep -qx "$pkg"; then
+                        echo "  [SAFETY GUARD] Skipping $pkg: TV opens HDMI/AV inputs and channels with it."
+                        continue
+                    fi
+                    if echo "$SETTINGS_HANDLERS" | grep -qx "$pkg"; then
+                        echo "  [SAFETY GUARD] Skipping $pkg: TV opens System Settings with it."
+                        continue
+                    fi
+                fi
                 # Standard user disable
                 adb -s "$target" shell "pm disable-user --user 0 $pkg" </dev/null >/dev/null 2>&1 || true
                 DISABLED_COUNT=$((DISABLED_COUNT + 1))
@@ -866,6 +894,10 @@ do_apply() {
     adb -s "$TARGET" shell "pm install -r /data/local/tmp/tvhome.apk; rm -f /data/local/tmp/tvhome.apk" >/dev/null 2>&1
     adb -s "$TARGET" shell "pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION" >/dev/null 2>&1 || true
     adb -s "$TARGET" shell "pm grant com.gathin.tvhome android.permission.ACCESS_COARSE_LOCATION" >/dev/null 2>&1 || true
+    adb -s "$TARGET" shell "pm grant com.gathin.tvhome android.permission.WRITE_SECURE_SETTINGS" >/dev/null 2>&1 || true
+    adb -s "$TARGET" shell "cmd package compile -m speed -f com.gathin.tvhome" >/dev/null 2>&1 || true
+    # Allow AUTO_START / APP_AUTO_START and persist to disk so TCL TclAppBoot binds accessibility services on reboot
+    adb -s "$TARGET" shell "cmd appops set com.gathin.tvhome AUTO_START allow 2>/dev/null; cmd appops set com.gathin.tvhome APP_AUTO_START allow 2>/dev/null; appops write-settings 2>/dev/null" >/dev/null 2>&1 || true
     # Activate CleanYourTV Accessibility Services:
     # - HomeKeyService: intercepts Home & Settings buttons orphaned when stock Google TV launcher was disabled
     # - InputKeyService: intercepts Input / Source buttons orphaned when stock Google TV launcher was disabled
@@ -889,19 +921,25 @@ do_apply() {
     echo "Launcher installed & remote key services activated successfully."
 
     # -----------------------------------------------------------------------------
-    # Configure Default Home
+    # Configure Default Home (Start new launcher before disabling stock launcher)
     # -----------------------------------------------------------------------------
     echo "[5/6] Setting CleanYourTV as default Home launcher..."
-    adb -s "$TARGET" shell "pm disable-user --user 0 com.google.android.apps.tv.launcherx" >/dev/null 2>&1 || true
+    adb -s "$TARGET" shell "am start -W -a android.intent.action.MAIN -c android.intent.category.HOME -n com.gathin.tvhome/.MainActivity" >/dev/null 2>&1 || true
 
-    local wifi_owners
-    wifi_owners="$(adb -s "$TARGET" shell "dumpsys wifi" 2>/dev/null | grep -o 'cname=[^ ]*' || true)"
-    if echo "$wifi_owners" | grep -q "setupwraith"; then
+    if echo "$WIFI_OWNERS" | grep -q "setupwraith"; then
         echo "  [SAFETY GUARD] Skipping setupwraith: saved Wi-Fi belongs to it."
     else
         adb -s "$TARGET" shell "pm disable-user --user 0 com.google.android.tungsten.setupwraith" >/dev/null 2>&1 || true
     fi
+    adb -s "$TARGET" shell "pm disable-user --user 0 com.google.android.apps.tv.launcherx" >/dev/null 2>&1 || true
     adb -s "$TARGET" shell "cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity" >/dev/null 2>&1 || true
+
+    # Verify Home handover succeeded; if setupwraith RecoveryActivity or nothing took Home, roll back launcherx
+    HOME_NOW="$(adb -s "$TARGET" shell "cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME" 2>/dev/null | tail -n 1 | tr -d '\r' || true)"
+    if [[ "$HOME_NOW" != com.gathin.tvhome/* ]]; then
+        echo "  [SAFETY GUARD] Home resolved to '$HOME_NOW' instead of CleanYourTV; re-enabling stock launcherx..."
+        adb -s "$TARGET" shell "pm enable --user 0 com.google.android.apps.tv.launcherx" >/dev/null 2>&1 || true
+    fi
 
     # -----------------------------------------------------------------------------
     # Clean up Third-Party Helpers

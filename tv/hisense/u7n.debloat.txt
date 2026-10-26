@@ -24,9 +24,11 @@ com.vidaa.oemtabcontentprovider
 net.vidaatv.hisense.android.tv
 
 # --- Background Lockdown (Starve Background CPU/Data, Do Not Disable) ---
-# Disabling these packages with 'pm disable-user' triggers recovery on Hisense MediaTek,
+# Disabling these packages with 'pm disable-user' triggers recovery on Hisense MediaTek (hengshan/huangshan),
 # but AppOps background restriction safely silences them without system instability:
 lockdown:com.vt.tv.smartsense
 lockdown:com.vt.tv.smartsense.ui
 lockdown:com.vt.tv.aiot
+lockdown:com.vt.tv.aiotprotocolapp
+lockdown:com.vt.tv.aiotsystemservice
 lockdown:com.vt.tv.ai_sense
