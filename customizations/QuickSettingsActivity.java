@@ -3,6 +3,7 @@ package com.gathin.tvhome;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.ActivityNotFoundException;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -207,16 +208,22 @@ public final class QuickSettingsActivity extends Activity {
 
     private void startScreensaver() {
         try {
+            String current = Settings.Secure.getString(getContentResolver(), "screensaver_components");
+            ComponentName cn = current != null && !current.isEmpty() ? ComponentName.unflattenFromString(current) : null;
+            if (cn == null || getPackageManager().resolveService(new Intent().setComponent(cn), 0) == null) {
+                Settings.Secure.putString(getContentResolver(), "screensaver_components",
+                        new ComponentName(this, ClockDream.class).flattenToShortString());
+            }
+        } catch (Exception ignored) {
+        }
+        try {
             Intent dream = new Intent(Intent.ACTION_MAIN)
                     .setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            if (getPackageManager().resolveActivity(dream, 0) == null) {
-                dream = new Intent(this, ClockActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            }
             startActivity(dream);
         } catch (Exception e) {
             try {
-                startActivity(new Intent("android.settings.DREAM_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                startActivity(new Intent(this, ClockActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             } catch (Exception ignored) {
             }
         }

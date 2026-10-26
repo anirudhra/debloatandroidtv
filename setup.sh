@@ -927,6 +927,12 @@ do_apply() {
         settings put secure enabled_accessibility_services "$cur"
         settings put secure accessibility_enabled 1
         settings put secure show_ime_with_hard_keyboard 1
+        dream=$(settings get secure screensaver_components)
+        case "$dream" in
+            ""|"null"|*dreamx*|*backdrop*)
+                settings put secure screensaver_components com.gathin.tvhome/.ClockDream
+                ;;
+        esac
     ' >/dev/null 2>&1 || true
     echo "Launcher installed & remote key services activated successfully."
 
