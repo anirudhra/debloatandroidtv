@@ -78,7 +78,7 @@ if [ "$BUILD_APK" = true ]; then
     echo "Building release APK..."
     # Auto-detect JDK 17 and Android SDK if not already set in environment
     if [ -z "${JAVA_HOME:-}" ]; then
-        for jdir in "$TARGET_DIR/tools/jdk-17" "/usr/lib/jvm/java-17-openjdk-amd64" "/usr/lib/jvm/java-17-openjdk" "/opt/homebrew/opt/openjdk@17"; do
+        for jdir in "$TARGET_DIR/tools/jdk-17" "$HOME/Android/jdk-17" "/usr/lib/jvm/java-17-openjdk-amd64" "/usr/lib/jvm/java-17-openjdk" "/opt/homebrew/opt/openjdk@17"; do
             if [ -d "$jdir" ]; then
                 export JAVA_HOME="$jdir"
                 export PATH="$JAVA_HOME/bin:$PATH"

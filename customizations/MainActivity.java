@@ -3052,16 +3052,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 popup.dismiss();
             }
         });
+        // The OK-up (and any held auto-repeat ACTION_DOWN) after opening the menu must not activate its first row.
         final boolean[] pressed = {false};
         row.setOnKeyListener((v, code, event) -> {
             if (code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER) return false;
-            if (event.getAction() == KeyEvent.ACTION_DOWN) pressed[0] = true;
-            if (event.getAction() == KeyEvent.ACTION_UP && pressed[0]) {
-                pressed[0] = false;
-                row.performClick();
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (event.getRepeatCount() == 0) pressed[0] = true;
                 return true;
             }
-            return false;
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                boolean activate = pressed[0];
+                pressed[0] = false;
+                if (activate && !event.isCanceled()) {
+                    row.performClick();
+                }
+            }
+            return true;
         });
         rows.addView(row);
         return statusView;

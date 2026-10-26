@@ -240,7 +240,10 @@ fi
 
 TARGET="${TV_HOST}:${TV_PORT}"
 
-# Ensure ADB is available
+# Ensure ADB is available (auto-detect ~/Android/Sdk/platform-tools if not on PATH)
+if ! command -v adb >/dev/null 2>&1 && [ -x "$HOME/Android/Sdk/platform-tools/adb" ]; then
+    export PATH="$HOME/Android/Sdk/platform-tools:$PATH"
+fi
 if ! command -v adb >/dev/null 2>&1; then
     echo "Error: 'adb' command not found. Please install Android platform-tools or add adb to PATH."
     exit 1

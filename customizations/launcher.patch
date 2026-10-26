@@ -249,7 +249,7 @@ index 3fd973d5..1ce7cb42 100644
              }
              return true;
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
-index 5be43c94..0d99ed16 100644
+index 5be43c94..c18e4d9e 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
 @@ -3,6 +3,7 @@ package com.gathin.tvhome;
@@ -477,7 +477,7 @@ index 5be43c94..0d99ed16 100644
          try {
              startActivity(view);
              return;
-@@ -2876,6 +2973,212 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2876,6 +2973,218 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          rows.getChildAt(0).requestFocus();
      }
  
@@ -560,16 +560,22 @@ index 5be43c94..0d99ed16 100644
 +                popup.dismiss();
 +            }
 +        });
++        // The OK-up (and any held auto-repeat ACTION_DOWN) after opening the menu must not activate its first row.
 +        final boolean[] pressed = {false};
 +        row.setOnKeyListener((v, code, event) -> {
 +            if (code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER) return false;
-+            if (event.getAction() == KeyEvent.ACTION_DOWN) pressed[0] = true;
-+            if (event.getAction() == KeyEvent.ACTION_UP && pressed[0]) {
-+                pressed[0] = false;
-+                row.performClick();
++            if (event.getAction() == KeyEvent.ACTION_DOWN) {
++                if (event.getRepeatCount() == 0) pressed[0] = true;
 +                return true;
 +            }
-+            return false;
++            if (event.getAction() == KeyEvent.ACTION_UP) {
++                boolean activate = pressed[0];
++                pressed[0] = false;
++                if (activate && !event.isCanceled()) {
++                    row.performClick();
++                }
++            }
++            return true;
 +        });
 +        rows.addView(row);
 +        return statusView;
@@ -690,7 +696,7 @@ index 5be43c94..0d99ed16 100644
      /** The header opens launcher settings directly; hold OK keeps the extra home actions available. */
      private void showSettingsMenu() {
          View anchor = findViewById(R.id.btnSettings);
-@@ -2929,6 +3232,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2929,6 +3238,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          });
          addSettingsMenuRow(rows, popup, R.string.library_app_info, () -> open(new Intent(
                  Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg))));
