@@ -733,7 +733,7 @@ index 5be43c94..a31f1386 100644
          popup.setWidth(Math.max((int) (200 * density), panel.getMeasuredWidth()));
          // Dock tiles sit near the bottom of the screen: open the menu above the tile when it would not fit below.
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/QuickSettingsActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/QuickSettingsActivity.java
-index 8f5a1aa8..d2aa7e03 100644
+index 8f5a1aa8..89d52e86 100644
 --- a/launcher/app/src/main/java/com/gathin/tvhome/QuickSettingsActivity.java
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/QuickSettingsActivity.java
 @@ -1,27 +1,42 @@
@@ -780,7 +780,7 @@ index 8f5a1aa8..d2aa7e03 100644
          setContentView(R.layout.activity_quick_settings);
          findViewById(R.id.scrim).setOnClickListener(v -> finish());
          LinearLayout rows = findViewById(R.id.rows);
-@@ -33,6 +48,24 @@ public final class QuickSettingsActivity extends Activity {
+@@ -33,6 +48,31 @@ public final class QuickSettingsActivity extends Activity {
          // Through Home, so it rebuilds with the new choices when Launcher settings closes.
          addRow(rows, R.drawable.ic_home_settings, R.string.launcher_settings, 0,
                  new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_LAUNCHER_SETTINGS));
@@ -802,10 +802,17 @@ index 8f5a1aa8..d2aa7e03 100644
 +            if (timerStatus[0] != null) timerStatus[0].setText(sleepStatus());
 +        });
 +
++        float density = getResources().getDisplayMetrics().density;
++        View panel = findViewById(R.id.panel);
++        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
++        ViewGroup.LayoutParams lp = panel.getLayoutParams();
++        lp.width = Math.max((int) (220 * density), Math.min(panel.getMeasuredWidth(), (int) (340 * density)));
++        panel.setLayoutParams(lp);
++
          rows.getChildAt(0).requestFocus();
      }
  
-@@ -43,6 +76,24 @@ public final class QuickSettingsActivity extends Activity {
+@@ -43,6 +83,24 @@ public final class QuickSettingsActivity extends Activity {
          finish();
      }
  
@@ -830,7 +837,7 @@ index 8f5a1aa8..d2aa7e03 100644
      /** Anything else taking the screen (Home, an app, a screensaver) closes the panel. */
      @Override
      protected void onPause() {
-@@ -51,6 +102,17 @@ public final class QuickSettingsActivity extends Activity {
+@@ -51,6 +109,17 @@ public final class QuickSettingsActivity extends Activity {
          overridePendingTransition(0, 0);
      }
  
@@ -848,7 +855,7 @@ index 8f5a1aa8..d2aa7e03 100644
      private void addRow(LinearLayout rows, int icon, int title, int status, Intent target) {
          View row = getLayoutInflater().inflate(R.layout.item_input, rows, false);
          ((ImageView) row.findViewById(R.id.icon)).setImageResource(icon);
-@@ -69,4 +131,87 @@ public final class QuickSettingsActivity extends Activity {
+@@ -69,4 +138,87 @@ public final class QuickSettingsActivity extends Activity {
          });
          rows.addView(row);
      }

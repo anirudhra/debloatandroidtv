@@ -66,6 +66,13 @@ public final class QuickSettingsActivity extends Activity {
             if (timerStatus[0] != null) timerStatus[0].setText(sleepStatus());
         });
 
+        float density = getResources().getDisplayMetrics().density;
+        View panel = findViewById(R.id.panel);
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        ViewGroup.LayoutParams lp = panel.getLayoutParams();
+        lp.width = Math.max((int) (220 * density), Math.min(panel.getMeasuredWidth(), (int) (340 * density)));
+        panel.setLayoutParams(lp);
+
         rows.getChildAt(0).requestFocus();
     }
 
