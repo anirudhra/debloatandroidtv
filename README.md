@@ -17,6 +17,7 @@ debloatandroidtv/
 ├── README.md               # Complete setup, build, and deployment guide
 ├── .gitignore              # Automatically excludes device backups & build artifacts
 ├── LICENSE                 # MIT License
+├── UPSTREAM_COMMIT         # Pinned CleanYourTV base & sync commit hashes for reproducible builds
 ├── setup.sh                # Multi-device ADB setup, discovery & verification script
 ├── apply_to_cleanyourtv.sh # Merges customizations into upstream CleanYourTV clone
 ├── bin/
@@ -318,42 +319,52 @@ python3 tools/adb-closed.py 10.0.10.25
 
 ## Workflow 6: Clone Upstream, Merge Customizations, Build & Deploy
 
-If you want to pull updates from upstream [CleanYourTV](https://github.com/Gathin23/cleanyourtv), recompile the launcher, or make further modifications, you have two flexible methods:
+Because upstream [CleanYourTV](https://github.com/Gathin23/cleanyourtv) moves rapidly, [`UPSTREAM_COMMIT`](UPSTREAM_COMMIT) in the repository root tracks two exact commit hashes for reproducibility:
+* `UPSTREAM_BASE_COMMIT` (`30626a8e`): The exact upstream commit that [`customizations/`](customizations) and [`customizations/launcher.patch`](customizations/launcher.patch) check out and apply cleanly onto without pulling in unwanted upstream bloat.
+* `UPSTREAM_SYNC_COMMIT` (`8ea48ca2`): The latest upstream commit audited and cherry-picked into `customizations/`, `tools/`, and `tv/` (along with `UPSTREAM_SYNC_DATE`).
+
+> [!IMPORTANT]
+> **Keeping [`UPSTREAM_COMMIT`](UPSTREAM_COMMIT) Updated in the Future:**  
+> Whenever you audit newer commits in `Gathin23/cleanyourtv` (`git log $(grep UPSTREAM_SYNC_COMMIT UPSTREAM_COMMIT | cut -d'"' -f2)..HEAD`), cherry-pick changes, or rebase and recompile [`bin/tvhome.apk`](bin/tvhome.apk) against a newer upstream commit:
+> 1. Update `UPSTREAM_BASE_COMMIT` (if rebased) and `UPSTREAM_SYNC_COMMIT` / `UPSTREAM_SYNC_DATE` in [`UPSTREAM_COMMIT`](UPSTREAM_COMMIT).
+> 2. Regenerate [`customizations/launcher.patch`](customizations/launcher.patch) against `UPSTREAM_BASE_COMMIT` (`git diff --binary > customizations/launcher.patch`).
 
 ### Option A: Automated Build Script (Recommended)
 
 Run one command from the `debloatandroidtv` root:
 
 ```bash
-cd ~/code/github/debloatandroidtv
+cd ~/debloatandroidtv
 ./apply_to_cleanyourtv.sh ../cleanyourtv --build
 ```
 
 * **What it does automatically:**
   1. Checks if `../cleanyourtv` exists. If not, it clones `https://github.com/Gathin23/cleanyourtv.git` for you.
-  2. Merges all custom assets, Java classes (`MainActivity.java`, `AppAdapter.java`, `Sleep.java`, `SleepService.java`, `Weather.java`), layout files, strings, and manifests into the clone.
-  3. Uses `./gradlew assembleRelease` to compile the optimized APK.
-  4. Automatically copies the compiled release APK into `bin/tvhome.apk`.
+  2. Sources [`UPSTREAM_COMMIT`](UPSTREAM_COMMIT) and checks out `UPSTREAM_BASE_COMMIT` so the upstream base is guaranteed to match your customizations.
+  3. Merges all custom assets, Java classes (`MainActivity.java`, `AppAdapter.java`, `AppLaunchActivity.java`, `RemoteKeys.java`, `ServiceRepair.java`, `Sleep.java`, `SleepService.java`, `Weather.java`), layout files, strings, and manifests into the clone.
+  4. Uses `./gradlew assembleRelease` to compile the optimized APK and copies it to `bin/tvhome.apk`.
 
 ### Option B: Native Git Patch Workflow
 
-If you prefer standard Git patching:
+If you prefer standard Git patching using the commit recorded in [`UPSTREAM_COMMIT`](UPSTREAM_COMMIT):
 
 ```bash
-# 1. Clone upstream CleanYourTV
+# 1. Clone upstream CleanYourTV and check out the pinned base commit
 cd ~/code/github
-git clone https://github.com/Gathin23/cleanyourtv.git
+source ~/debloatandroidtv/UPSTREAM_COMMIT
+git clone "$UPSTREAM_REPO" cleanyourtv
 cd cleanyourtv
+git checkout "$UPSTREAM_BASE_COMMIT"
 
 # 2. Apply the binary git patch from this repo
-git apply ~/code/github/debloatandroidtv/customizations/launcher.patch
+git apply ~/debloatandroidtv/customizations/launcher.patch
 
 # 3. Build release APK
 cd launcher
 ./gradlew assembleRelease
 
 # 4. Copy binary back to debloat kit
-cp app/build/outputs/apk/release/app-release.apk ~/code/github/debloatandroidtv/bin/tvhome.apk
+cp app/build/outputs/apk/release/app-release.apk ~/debloatandroidtv/bin/tvhome.apk
 ```
 
 ### Deploy to Your TV

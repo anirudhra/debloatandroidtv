@@ -32,10 +32,15 @@ if [ ! -d "$TARGET_DIR" ]; then
 fi
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
 
-# Pin to tested lightweight upstream base commit by default so upstream Config/Settings churn doesn't break compilation
-UPSTREAM_COMMIT="${UPSTREAM_COMMIT:-30626a8e}"
-if [ -d "$TARGET_DIR/.git" ] && [ -n "$UPSTREAM_COMMIT" ]; then
-    git -C "$TARGET_DIR" checkout "$UPSTREAM_COMMIT" >/dev/null 2>&1 || true
+# Load pinned upstream commit record from UPSTREAM_COMMIT
+if [ -f "$SCRIPT_DIR/UPSTREAM_COMMIT" ]; then
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/UPSTREAM_COMMIT"
+fi
+UPSTREAM_BASE_COMMIT="${UPSTREAM_BASE_COMMIT:-30626a8e}"
+if [ -d "$TARGET_DIR/.git" ] && [ -n "$UPSTREAM_BASE_COMMIT" ]; then
+    echo "Checking out pinned upstream base commit ($UPSTREAM_BASE_COMMIT)..."
+    git -C "$TARGET_DIR" checkout "$UPSTREAM_BASE_COMMIT" >/dev/null 2>&1 || true
 fi
 
 echo "Applying customizations to '$TARGET_DIR'..."
@@ -71,13 +76,23 @@ echo "Successfully merged customized files into $TARGET_DIR/launcher."
 
 if [ "$BUILD_APK" = true ]; then
     echo "Building release APK..."
-    # Check for JDK / Android SDK if present in cleanyourtv/tools
-    if [ -z "${JAVA_HOME:-}" ] && [ -d "$TARGET_DIR/tools/jdk-17" ]; then
-        export JAVA_HOME="$TARGET_DIR/tools/jdk-17"
-        export PATH="$JAVA_HOME/bin:$PATH"
+    # Auto-detect JDK 17 and Android SDK if not already set in environment
+    if [ -z "${JAVA_HOME:-}" ]; then
+        for jdir in "$TARGET_DIR/tools/jdk-17" "/usr/lib/jvm/java-17-openjdk-amd64" "/usr/lib/jvm/java-17-openjdk" "/opt/homebrew/opt/openjdk@17"; do
+            if [ -d "$jdir" ]; then
+                export JAVA_HOME="$jdir"
+                export PATH="$JAVA_HOME/bin:$PATH"
+                break
+            fi
+        done
     fi
-    if [ -z "${ANDROID_HOME:-}" ] && [ -d "$TARGET_DIR/tools/android-sdk" ]; then
-        export ANDROID_HOME="$TARGET_DIR/tools/android-sdk"
+    if [ -z "${ANDROID_HOME:-}" ]; then
+        for sdir in "$TARGET_DIR/tools/android-sdk" "$HOME/Android/Sdk" "$HOME/Library/Android/sdk"; do
+            if [ -d "$sdir" ]; then
+                export ANDROID_HOME="$sdir"
+                break
+            fi
+        done
     fi
 
     (

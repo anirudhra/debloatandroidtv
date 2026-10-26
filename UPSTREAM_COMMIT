@@ -1,0 +1,20 @@
+# Upstream CleanYourTV Version Record
+# Repository: https://github.com/Gathin23/cleanyourtv
+#
+# This file tracks the exact upstream CleanYourTV commit that `customizations/`
+# and `customizations/launcher.patch` build and patch cleanly against, as well
+# as the latest upstream commit from which selective fixes and tools were synced.
+#
+# `apply_to_cleanyourtv.sh` automatically sources this file and checks out
+# UPSTREAM_BASE_COMMIT before applying customizations and building `bin/tvhome.apk`.
+# Update this file whenever customizations are rebased or recompiled against a new
+# upstream CleanYourTV commit.
+
+UPSTREAM_REPO="https://github.com/Gathin23/cleanyourtv.git"
+
+# Base commit that `customizations/` and `customizations/launcher.patch` apply cleanly onto:
+UPSTREAM_BASE_COMMIT="30626a8e"
+
+# Latest upstream commit audited and cherry-picked into `customizations/`, `tools/`, and `tv/`:
+UPSTREAM_SYNC_COMMIT="8ea48ca2"
+UPSTREAM_SYNC_DATE="2026-10-25"
