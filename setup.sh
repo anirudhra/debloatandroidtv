@@ -31,6 +31,8 @@ Options:
   --buttons, -b             Configure remote buttons only (no debloat / launcher install)
   --discover, -d [model]    Audit TV and generate candidate debloat list under tv/<brand>/<model>.debloat.txt
   --verify, -v              Verify launcher, DNS, and debloat status on TV
+  --reset-dns               Reset Private DNS to default (opportunistic) and clear stuck VPN lockdown settings
+  --adguard-dns             Enable AdGuard Private DNS (with live connectivity verification & auto-rollback)
   --help, -h                Show this help reference
 
 Examples:
@@ -147,6 +149,7 @@ TV_MODEL="${TV_MODEL:-}"
 TV_HOST="${TV_HOST:-10.0.10.25}"
 TV_PORT="${TV_PORT:-5555}"
 OUTPUT_FILE=""
+DNS_ACTION="${DNS_ACTION:-auto}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -194,6 +197,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         -v|--verify)
             COMMAND="verify"
+            shift
+            ;;
+        --reset-dns|--fix-dns|reset-dns|fix-dns)
+            COMMAND="reset_dns"
+            shift
+            ;;
+        --adguard-dns)
+            DNS_ACTION="enable"
+            shift
+            ;;
+        --no-dns)
+            DNS_ACTION="reset"
             shift
             ;;
         apply)
@@ -409,9 +424,95 @@ push_buttons_config() {
 # -----------------------------------------------------------------------------
 # Companion App Installer (Tube / TizenTube)
 # -----------------------------------------------------------------------------
+validate_apk_file() {
+    local file="$1"
+    [ -f "$file" ] || return 1
+    local size
+    size="$(wc -c < "$file" 2>/dev/null | tr -d '[:space:]' || echo 0)"
+    # Valid TizenTube Cobalt APK is ~40-50 MB; reject tiny/truncated files or HTML error pages (<1 MB)
+    [ "${size:-0}" -gt 1000000 ] || return 1
+    # Check ZIP/APK magic bytes ("PK\x03\x04")
+    local magic
+    magic="$(head -c 2 "$file" 2>/dev/null || true)"
+    [ "$magic" = "PK" ] || return 1
+    return 0
+}
+
+fetch_tizentube_apk() {
+    local apk_name="$1"
+    local dest_apk="$2"
+
+    if validate_apk_file "$dest_apk"; then
+        return 0
+    fi
+    rm -f "$dest_apk"
+
+    local download_url
+    download_url="$(curl -fsSL --connect-timeout 10 https://api.github.com/repos/reisxd/TizenTubeCobalt/releases/latest 2>/dev/null | grep -E "browser_download_url.*${apk_name}\"" | cut -d '"' -f 4 | head -1 || true)"
+    if [ -z "$download_url" ]; then
+        download_url="https://github.com/reisxd/TizenTubeCobalt/releases/latest/download/$apk_name"
+    fi
+
+    echo "  Fetching $apk_name from: $download_url"
+    mkdir -p "$SCRIPT_DIR/bin"
+    if ! curl -fL --retry 2 --connect-timeout 15 --progress-bar "$download_url" -o "$dest_apk"; then
+        echo "  [ERROR] Failed to download $apk_name from GitHub."
+        rm -f "$dest_apk"
+        return 1
+    fi
+
+    if ! validate_apk_file "$dest_apk"; then
+        echo "  [ERROR] Downloaded file $dest_apk is corrupted or not a valid APK."
+        rm -f "$dest_apk"
+        return 1
+    fi
+    return 0
+}
+
+try_install_tizentube_apk() {
+    local target="$1"
+    local local_apk="$2"
+    local remote_tmp="/data/local/tmp/tizentube.apk"
+
+    echo "  Pushing $(basename "$local_apk") to TV..."
+    local push_out
+    if ! push_out="$(adb -s "$target" push "$local_apk" "$remote_tmp" 2>&1)"; then
+        echo "  [ERROR] adb push failed: $push_out"
+        return 1
+    fi
+
+    # Temporarily disable Play Protect ADB verification so offline/restricted DNS never stalls or blocks pm install
+    local prev_verifier
+    prev_verifier="$(adb -s "$target" shell "settings get global verifier_verify_adb_installs" 2>/dev/null | tr -d '\r\n' || true)"
+    adb -s "$target" shell "settings put global verifier_verify_adb_installs 0" >/dev/null 2>&1 || true
+
+    echo "  Running package installer on TV..."
+    local install_out
+    install_out="$(adb -s "$target" shell "pm install -r $remote_tmp" 2>&1 | tr -d '\r' || true)"
+
+    # Handle signature mismatch or downgrade if a different build was previously installed
+    if [[ "$install_out" == *"INSTALL_FAILED_UPDATE_INCOMPATIBLE"* ]] || [[ "$install_out" == *"INSTALL_FAILED_VERSION_DOWNGRADE"* ]]; then
+        echo "  Existing TizenTube signature/version conflict detected; reinstalling cleanly..."
+        adb -s "$target" shell "pm uninstall io.gh.reisxd.tizentube.cobalt" >/dev/null 2>&1 || true
+        install_out="$(adb -s "$target" shell "pm install -r $remote_tmp" 2>&1 | tr -d '\r' || true)"
+    fi
+
+    adb -s "$target" shell "rm -f $remote_tmp" >/dev/null 2>&1 || true
+    if [ -n "$prev_verifier" ] && [ "$prev_verifier" != "null" ]; then
+        adb -s "$target" shell "settings put global verifier_verify_adb_installs $prev_verifier" >/dev/null 2>&1 || true
+    fi
+
+    LAST_INSTALL_OUT="$install_out"
+    if [[ "$install_out" == *"Success"* ]]; then
+        return 0
+    fi
+    return 1
+}
+
 install_tizentube_if_needed() {
     local target="$1"
     local pkg="io.gh.reisxd.tizentube.cobalt"
+    LAST_INSTALL_OUT=""
 
     echo -n "Checking if TizenTube (YouTube) is installed on TV... "
     if adb -s "$target" shell "pm path $pkg" 2>/dev/null | grep -q "package:"; then
@@ -421,39 +522,100 @@ install_tizentube_if_needed() {
     echo "NO"
     echo "Downloading and installing latest TizenTube Cobalt from GitHub..."
 
-    local local_apk="$SCRIPT_DIR/bin/tizentube.apk"
-    if [ ! -f "$local_apk" ]; then
-        local abi
-        abi="$(adb -s "$target" shell getprop ro.product.cpu.abi 2>/dev/null | tr -d '\r\n')"
-        local apk_name="cobalt-arm.apk"
-        if [ "$abi" = "arm64-v8a" ]; then
-            local abilist
-            abilist="$(adb -s "$target" shell getprop ro.product.cpu.abilist 2>/dev/null | tr -d '\r\n')"
-            if [[ "$abilist" == *"arm64-v8a"* ]] && [[ "$abilist" != *"armeabi"* ]]; then
-                apk_name="cobalt-arm64.apk"
+    # Detect TV CPU ABI (Note: TCL G08 65Q6C/Q7C/C6K sets run 32-bit armeabi-v7a userspace even on 64-bit SoCs)
+    local abi abilist apk_name
+    abi="$(adb -s "$target" shell getprop ro.product.cpu.abi 2>/dev/null | tr -d '\r\n')"
+    abilist="$(adb -s "$target" shell getprop ro.product.cpu.abilist 2>/dev/null | tr -d '\r\n')"
+    apk_name="cobalt-arm.apk"
+    if [ "$abi" = "arm64-v8a" ] || [[ "$abilist" == *"arm64-v8a"* ]]; then
+        if [[ "$abilist" != *"armeabi"* ]] && [ "$abi" = "arm64-v8a" ]; then
+            apk_name="cobalt-arm64.apk"
+        fi
+    fi
+    echo "  Detected TV ABI: ${abi:-unknown} (abilist: ${abilist:-unknown}) -> selecting $apk_name"
+
+    # Remove any legacy unversioned bin/tizentube.apk if it is invalid or wrong architecture
+    local arch_apk="$SCRIPT_DIR/bin/$apk_name"
+    if ! fetch_tizentube_apk "$apk_name" "$arch_apk"; then
+        echo "  [WARNING] Unable to download TizenTube ($apk_name). Re-enabling stock YouTube so TV is not left without YouTube..."
+        adb -s "$target" shell "pm enable --user 0 com.google.android.youtube.tv" >/dev/null 2>&1 || true
+        return 1
+    fi
+
+    if ! try_install_tizentube_apk "$target" "$arch_apk"; then
+        # If arm64 APK failed with INSTALL_FAILED_NO_MATCHING_ABIS (e.g. 32-bit TCL firmware), fall back to 32-bit cobalt-arm.apk
+        if [[ "$LAST_INSTALL_OUT" == *"INSTALL_FAILED_NO_MATCHING_ABIS"* ]] && [ "$apk_name" != "cobalt-arm.apk" ]; then
+            echo "  [INFO] TV rejected 64-bit APK (INSTALL_FAILED_NO_MATCHING_ABIS); falling back to 32-bit cobalt-arm.apk..."
+            apk_name="cobalt-arm.apk"
+            arch_apk="$SCRIPT_DIR/bin/$apk_name"
+            if fetch_tizentube_apk "$apk_name" "$arch_apk"; then
+                try_install_tizentube_apk "$target" "$arch_apk" || true
             fi
-        fi
-
-        local download_url
-        download_url="$(curl -s https://api.github.com/repos/reisxd/TizenTubeCobalt/releases/latest 2>/dev/null | grep -E "browser_download_url.*${apk_name}\"" | cut -d '"' -f 4 | head -1 || true)"
-        if [ -z "$download_url" ]; then
-            download_url="https://github.com/reisxd/TizenTubeCobalt/releases/latest/download/$apk_name"
-        fi
-
-        echo "Fetching: $download_url"
-        mkdir -p "$SCRIPT_DIR/bin"
-        if ! curl -L --progress-bar "$download_url" -o "$local_apk"; then
-            echo "Warning: Unable to download TizenTube automatically. Sideloading skipped."
-            rm -f "$local_apk"
-            return 0
         fi
     fi
 
-    echo "Deploying TizenTube (YouTube) to TV..."
-    adb -s "$target" push "$local_apk" /data/local/tmp/tizentube.apk >/dev/null 2>&1
-    adb -s "$target" shell "pm install -r /data/local/tmp/tizentube.apk; rm -f /data/local/tmp/tizentube.apk" >/dev/null 2>&1
-    adb -s "$target" shell "pm grant $pkg android.permission.RECORD_AUDIO" >/dev/null 2>&1 || true
-    echo "TizenTube (YouTube) successfully installed and configured on TV!"
+    # Final verification that the package is actually registered in Android's PackageManager
+    if [[ "$LAST_INSTALL_OUT" == *"Success"* ]] && adb -s "$target" shell "pm path $pkg" 2>/dev/null | grep -q "package:"; then
+        adb -s "$target" shell "pm grant $pkg android.permission.RECORD_AUDIO" >/dev/null 2>&1 || true
+        echo "TizenTube (YouTube) successfully installed and verified on TV!"
+        return 0
+    else
+        echo "  [ERROR] TizenTube installation failed on $target!"
+        echo "  [ERROR] Installer output: ${LAST_INSTALL_OUT:-No output from pm install}"
+        echo "  [SAFETY GUARD] Re-enabling stock YouTube (com.google.android.youtube.tv) so YouTube stays usable..."
+        adb -s "$target" shell "pm enable --user 0 com.google.android.youtube.tv" >/dev/null 2>&1 || true
+        return 1
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# DNS & VPN Recovery / Configuration Helper
+# -----------------------------------------------------------------------------
+test_tv_dns_resolution() {
+    local target="$1"
+    # Test if the TV can resolve and reach a domain name (or resolve via ping/getent)
+    if adb -s "$target" shell "ping -c 1 -W 3 www.google.com >/dev/null 2>&1 || ping -c 1 -W 3 example.com >/dev/null 2>&1" 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+reset_tv_dns_and_vpn() {
+    local target="$1"
+    echo "Resetting Android TV Private DNS and clearing stuck VPN lockdown settings on $target..."
+    adb -s "$target" shell '
+        settings put global private_dns_mode opportunistic
+        settings delete global private_dns_specifier >/dev/null 2>&1 || true
+        # Clear any orphaned always-on VPN lockdown that drops packets when a VPN app is removed
+        lockdown=$(settings get secure always_on_vpn_lockdown)
+        if [ "$lockdown" = "1" ]; then
+            settings put secure always_on_vpn_lockdown 0
+        fi
+        vpn_pkg=$(settings get secure always_on_vpn_app)
+        if [ -n "$vpn_pkg" ] && [ "$vpn_pkg" != "null" ]; then
+            if ! pm path "$vpn_pkg" >/dev/null 2>&1; then
+                settings delete secure always_on_vpn_app >/dev/null 2>&1 || true
+                settings delete secure always_on_vpn_lockdown >/dev/null 2>&1 || true
+            fi
+        fi
+    ' >/dev/null 2>&1 || true
+    echo "Private DNS restored to default (opportunistic) and orphaned VPN locks cleared."
+}
+
+do_reset_dns() {
+    echo "========================================================"
+    echo "Android TV DNS & VPN Connectivity Repair"
+    echo "Target: $TARGET"
+    echo "========================================================"
+    ensure_connected
+    reset_tv_dns_and_vpn "$TARGET"
+    echo -n "Testing TV internet & DNS resolution... "
+    if test_tv_dns_resolution "$TARGET"; then
+        echo "PASS (DNS resolution and internet access working!)"
+    else
+        echo "WARN (Ping test did not answer; if you changed Wi-Fi IP/DNS manually on TV, toggle Wi-Fi off/on)"
+    fi
+    echo "========================================================"
 }
 
 # =============================================================================
@@ -658,27 +820,30 @@ do_verify() {
         echo "       Current Home: $(echo "$HOME_RES" | tail -1)"
     fi
 
-    # 2. DNS Ad-Blocking Check
-    echo -n "[2/$TOTAL_CHECKS] Checking Private DNS Ad-Blocking... "
+    # 2. DNS & Network Connectivity Check
+    echo -n "[2/$TOTAL_CHECKS] Checking DNS & Internet Connectivity... "
     DNS_SPEC="$(adb -s "$TARGET" shell "settings get global private_dns_specifier" 2>/dev/null | tr -d '\r')"
     DNS_MODE="$(adb -s "$TARGET" shell "settings get global private_dns_mode" 2>/dev/null | tr -d '\r')"
-    if [[ "$DNS_SPEC" == *"adguard"* ]] && [[ "$DNS_MODE" == "hostname" ]]; then
+    if test_tv_dns_resolution "$TARGET"; then
         echo "PASS"
-        echo "       Private DNS Specifier: $DNS_SPEC ($DNS_MODE)"
+        echo "       DNS Resolution: Working (Private DNS mode: ${DNS_MODE:-opportunistic}, specifier: ${DNS_SPEC:-default})"
         PASSED=$((PASSED + 1))
     else
         echo "WARN"
-        echo "       Private DNS is currently: ${DNS_SPEC:-disabled} (${DNS_MODE:-off})"
+        echo "       DNS Resolution: Failed or unreachable (Private DNS: ${DNS_SPEC:-none} / ${DNS_MODE:-off})"
+        echo "       Run './setup.sh --reset-dns --ip $TV_HOST' to reset Private DNS & VPN lockdown."
     fi
 
-    # 3. Disabled Bloatware Count
-    echo -n "[3/$TOTAL_CHECKS] Checking Disabled Bloatware Packages... "
+    # 3. Disabled Bloatware & Companion App Check
+    echo -n "[3/$TOTAL_CHECKS] Checking Disabled Bloatware & YouTube Status... "
     DIS_COUNT="$(adb -s "$TARGET" shell "pm list packages -d" 2>/dev/null | grep -c "package:" || true)"
     if [ "$DIS_COUNT" -gt 0 ]; then
         echo "PASS"
         echo "       Total bloatware packages disabled: $DIS_COUNT"
-        if adb -s "$TARGET" shell "pm list packages -d" 2>/dev/null | grep -q "com.google.android.youtube.tv"; then
-            echo "       Stock YouTube: Disabled (replaced by YouTube)"
+        if adb -s "$TARGET" shell "pm path io.gh.reisxd.tizentube.cobalt" 2>/dev/null | grep -q "package:"; then
+            echo "       TizenTube Cobalt (Ad-Free YouTube): Installed"
+        elif adb -s "$TARGET" shell "pm list packages -d" 2>/dev/null | grep -q "com.google.android.youtube.tv"; then
+            echo "       [WARN] Stock YouTube is disabled, but TizenTube Cobalt is NOT installed!"
         fi
         PASSED=$((PASSED + 1))
     else
@@ -876,10 +1041,39 @@ do_apply() {
     echo "Debloat applied: $DISABLED_COUNT packages disabled, $STARVED_COUNT packages starved in background."
 
     # -----------------------------------------------------------------------------
-    # AdGuard Private DNS
+    # Private DNS & VPN Connectivity Guard
     # -----------------------------------------------------------------------------
-    echo "[3/6] Ensuring AdGuard Private DNS is active..."
-    adb -s "$TARGET" shell "settings put global private_dns_specifier dns.adguard-dns.com && settings put global private_dns_mode hostname"
+    echo "[3/6] Checking DNS & VPN network health..."
+    if [ "$DNS_ACTION" = "reset" ]; then
+        reset_tv_dns_and_vpn "$TARGET"
+    elif [ "$DNS_ACTION" = "enable" ]; then
+        # Check if a local VPN (tun0) is active before enabling strict DoT hostname mode
+        if adb -s "$TARGET" shell "ip addr show tun0 2>/dev/null" | grep -q "inet "; then
+            echo "  [SAFETY GUARD] Active VPN tunnel (tun0) detected on TV; skipping strict Private DNS hostname mode to prevent DNS deadlock."
+            reset_tv_dns_and_vpn "$TARGET"
+        else
+            echo "  Enabling AdGuard Private DNS (dns.adguard-dns.com) and verifying connectivity..."
+            adb -s "$TARGET" shell "settings put global private_dns_specifier dns.adguard-dns.com && settings put global private_dns_mode hostname"
+            sleep 2
+            if test_tv_dns_resolution "$TARGET"; then
+                echo "  AdGuard Private DNS verified working!"
+            else
+                echo "  [SAFETY GUARD] AdGuard Private DNS blocked or unreachable on this network/TV; rolling back to default (opportunistic) so internet stays online..."
+                reset_tv_dns_and_vpn "$TARGET"
+            fi
+        fi
+    else
+        # Default ("auto"): do not force strict hostname Private DNS (upstream CleanYourTV guidance:
+        # strict DoT breaks networks with VPNs, router DNS rules, or blocked port 853, and Android TV
+        # has no UI toggle to undo it). Also auto-repair if a previous run left Private DNS broken.
+        CUR_DNS_MODE="$(adb -s "$TARGET" shell "settings get global private_dns_mode" 2>/dev/null | tr -d '\r\n' || true)"
+        if [ "$CUR_DNS_MODE" = "hostname" ] && ! test_tv_dns_resolution "$TARGET"; then
+            echo "  [SAFETY GUARD] Existing strict Private DNS is failing resolution; resetting to default (opportunistic)..."
+            reset_tv_dns_and_vpn "$TARGET"
+        else
+            echo "  Preserving router/system DNS (pass --adguard-dns to opt in, or --reset-dns to reset)."
+        fi
+    fi
 
     # -----------------------------------------------------------------------------
     # Install Custom Launcher
@@ -1005,8 +1199,9 @@ do_apply() {
 
 # Dispatch
 case "$COMMAND" in
-    discover) do_discover ;;
-    verify)   do_verify ;;
-    buttons)  do_buttons ;;
-    apply)    do_apply ;;
+    discover)  do_discover ;;
+    verify)    do_verify ;;
+    buttons)   do_buttons ;;
+    reset_dns) do_reset_dns ;;
+    apply)     do_apply ;;
 esac
